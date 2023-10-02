@@ -1,0 +1,75 @@
+use std::{borrow::Cow, sync::Arc};
+
+use anyhow::anyhow;
+use twilight_interactions::command::{
+    CommandInputData, CommandModel, CommandOption, CreateCommand, CreateOption,
+};
+use twilight_model::{
+    application::interaction::application_command::CommandData,
+    gateway::payload::incoming::InteractionCreate,
+};
+
+use crate::{
+    context::Context,
+    models::silly_command::SillyCommandType,
+    services::silly_command::SillyCommandPDO,
+    utils::{box_commands::RunnableCommand, self},
+};
+
+#[derive(CreateOption, CommandOption, Debug)]
+pub enum SillyCommandTypeOption {
+    #[option(name = "Author Only", value = "author_only")]
+    AuthorOnly,
+    #[option(name = "Single User", value = "single_user")]
+    SingleUser,
+}
+
+#[derive(CreateCommand, CommandModel)]
+#[command(
+    name = "silly_command",
+    desc = "Get all data of a silly command"
+)]
+pub struct SillyCommand {
+    /// The name of the command
+    name: String,
+
+}
+
+#[async_trait::async_trait]
+impl RunnableCommand for SillyCommand {
+    async fn run(
+        _shard: u64,
+        interaction: &InteractionCreate,
+        data: Box<CommandData>,
+        context: Arc<Context>,
+    ) -> anyhow::Result<anyhow::Result<()>> {
+        let model = Self::from_interaction(CommandInputData {
+            options: data.options,
+            resolved: data.resolved.map(Cow::Owned),
+        })?;
+
+        let result = match SillyCommandPDO::fetch_silly_command_by_name(Arc::clone(&context), &model.name)
+        .await {
+            Some(e) => e,
+            None => return Ok(Err(anyhow!("❌ This command does not exist")))
+        };
+
+        let description = format!("Command type: {}\nImages: {}\nSelf Images: {}\n Texts: {}\n Self Texts: {}", 
+        match result.command_type {
+            SillyCommandType::AuthorOnly => "Author only",
+            SillyCommandType::SingleUser => "Single User"
+        },
+        result.images.len(), result.self_images.len(), result.texts.len(), result.self_texts.len());       
+
+        let embed = utils::create_embed::create_embed(None, Arc::clone(&context)).await?; 
+        let embed = embed.description(description).build();
+
+        let interaction_client = context.http_client.interaction(context.application.id);
+        interaction_client
+            .update_response(&interaction.token)
+            .embeds(Some(&[embed]))?
+            .await?;
+
+        Ok(Ok(()))
+    }
+}
