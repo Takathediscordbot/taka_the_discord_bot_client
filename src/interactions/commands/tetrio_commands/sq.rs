@@ -11,6 +11,7 @@ use twilight_model::gateway::payload::incoming::InteractionCreate;
 
 use crate::context::Context;
 
+use crate::utils::timer::Timer;
 use crate::utils::box_commands::{CommandBox, RunnableCommand};
 use crate::utils::stats::{calculate_stats, PlayerStats};
 
@@ -122,6 +123,8 @@ impl RunnableCommand for SqCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+        log::info!("sq command");
+        let _command_timer = Timer::new("sq command");
         let model = GraphUser::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),

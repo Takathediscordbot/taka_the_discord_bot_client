@@ -19,6 +19,9 @@ use crate::interactions::commands::models::graph_user_model::{
     AverageSubCommand, DiscordUserSubCommand, GraphUser, StatsSubCommand, TetrioUserSubCommand,
 };
 
+use crate::utils::timer::Timer;
+
+
 #[derive(CreateCommand)]
 #[command(name = "psq", desc = "Get a graph of the playerstyle")]
 #[allow(unused)]
@@ -104,6 +107,10 @@ impl RunnableCommand for PsqCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+
+        log::info!("psq command");
+        let _command_timer = Timer::new("psq command");
+
         let model = GraphUser::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),

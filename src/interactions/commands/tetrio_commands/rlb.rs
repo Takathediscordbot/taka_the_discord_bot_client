@@ -18,6 +18,7 @@ use crate::{
 };
 
 use super::lb::LbCommand;
+use crate::utils::timer::Timer;
 
 #[derive(CreateCommand, CommandModel)]
 #[command(name = "rlb", desc = "Get the reverse leaderboard")]
@@ -47,6 +48,8 @@ impl RunnableCommand for RLbCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+        log::info!("rlb command");
+        let _command_timer = Timer::new("rlb command");
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),

@@ -21,6 +21,9 @@ use crate::interactions::commands::options::{
     user_rank_option::UserRankOption, user_stat_options::UserStatOption,
 };
 
+use crate::utils::timer::Timer;
+
+
 #[derive(CreateCommand, CommandModel)]
 #[command(name = "lb", desc = "Get the leaderboard")]
 pub struct LbCommand {
@@ -199,6 +202,8 @@ impl RunnableCommand for LbCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+        log::info!("lb command");
+        let _command_timer = Timer::new("lb command");
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
