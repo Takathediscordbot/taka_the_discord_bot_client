@@ -8,8 +8,8 @@ use twilight_model::{
 };
 
 use crate::{
-    context::Context, utils::box_commands::RunnableCommand,
-    services::silly_command::SillyCommandPDO,
+    context::Context, services::silly_command::SillyCommandPDO,
+    utils::box_commands::RunnableCommand,
 };
 
 #[derive(CreateCommand, CommandModel)]
@@ -22,7 +22,7 @@ pub struct AddSillyImage {
     /// Author
     author: bool,
     /// preference
-    preference: Option<String>
+    preference: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -39,7 +39,7 @@ impl RunnableCommand for AddSillyImage {
         })?;
 
         let Some(author) = interaction.author_id() else {
-            return Ok(Err(anyhow!("❌ You're probably not taka")))
+            return Ok(Err(anyhow!("❌ You're probably not taka")));
         };
 
         if author.get() != 434626996262273038 {
@@ -48,10 +48,10 @@ impl RunnableCommand for AddSillyImage {
 
         let Some(file_type) = Path::new(&model.attachment.filename)
             .extension()
-            .and_then(OsStr::to_str) else {
-                return Ok(Err(anyhow!("❌ Couldn't find file extension.")));
-            }
-        ;
+            .and_then(OsStr::to_str)
+        else {
+            return Ok(Err(anyhow!("❌ Couldn't find file extension.")));
+        };
 
         let bytes = reqwest::get(model.attachment.url)
             .await?
@@ -62,15 +62,24 @@ impl RunnableCommand for AddSillyImage {
             SillyCommandPDO::add_image_author(Arc::clone(&context), &model.name, bytes, file_type)
                 .await?
         } else {
-            SillyCommandPDO::add_image(Arc::clone(&context), &model.name, bytes, file_type, model.preference.clone()).await?
+            SillyCommandPDO::add_image(
+                Arc::clone(&context),
+                &model.name,
+                bytes,
+                file_type,
+                model.preference.clone(),
+            )
+            .await?
         };
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some(&format!(
-                " Image has been created with id {result} for command {}",
-                model.name
-            )))?
+
+        context
+            .response_to_interaction_with_content(
+                interaction,
+                &format!(
+                    " Image has been created with id {result} for command {}",
+                    model.name
+                ),
+            )
             .await?;
 
         Ok(Ok(()))

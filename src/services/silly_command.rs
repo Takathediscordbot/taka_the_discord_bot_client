@@ -5,6 +5,39 @@ use anyhow::anyhow;
 use crate::{context::Context, models::silly_command::{RawSillyCommandData, SillyCommandData, Usages, SillyCommandType}};
 
 
+struct CommandUsage {
+    usages: i32
+}
+struct CommandUsageId {
+    id_silly_command_usage: i32
+}
+
+struct CommandId {
+    id_silly_command: i32
+}
+
+struct RandomImage {
+    image: String
+}
+
+struct CommandTextId {
+    id_silly_command_text: i32
+}
+
+struct CommandSelfActionTextId {
+    id_silly_command_self_action_text: i32
+}
+
+struct CommandSelfActionImageId {
+    id_silly_command_self_action: i32
+}
+
+struct CommandImageId {
+    id_silly_command_images: i32
+}
+
+
+
 pub struct SillyCommandPDO;
 impl SillyCommandPDO {
     
@@ -27,7 +60,7 @@ impl SillyCommandPDO {
         author: u64,
         user: u64,
     ) -> Option<i32> {
-        let record = sqlx::query_file!("./src/sql/silly_commands/fetch_command_usage.sql"
+        let record = sqlx::query_file_as!(CommandUsage, "./src/sql/silly_commands/fetch_command_usage.sql"
         , author.to_string(), user.to_string(), command)
         .fetch_one(&context.sql_connection)
         .await;
@@ -52,7 +85,7 @@ impl SillyCommandPDO {
         author: u64,
         user: u64,
     ) -> anyhow::Result<i32> {
-        let id = sqlx::query_file!("./src/sql/silly_commands/create_command_usage.sql", command, author.to_string(), user.to_string())
+        let id = sqlx::query_file_as!(CommandUsageId, "./src/sql/silly_commands/create_command_usage.sql", command, author.to_string(), user.to_string())
         .fetch_one(&context.sql_connection)
         .await?;
 
@@ -66,7 +99,7 @@ impl SillyCommandPDO {
         footer_text: &str,
         command_type: SillyCommandType,
     ) -> anyhow::Result<i32> {
-        let id = sqlx::query_file!("./src/sql/silly_commands/create_command.sql", command_name, description, command_type as i32, footer_text)
+        let id = sqlx::query_file_as!(CommandId, "./src/sql/silly_commands/create_command.sql", command_name, description, command_type as i32, footer_text)
         .fetch_one(&context.sql_connection)
         .await?;
 
@@ -107,7 +140,7 @@ impl SillyCommandPDO {
         preference: &str
     ) -> anyhow::Result<String> {
         let result = 
-        sqlx::query_file!(
+        sqlx::query_file_as!(RandomImage,
             "./src/sql/silly_commands/fetch_random_silly_image_by_name_and_preference.sql", 
             command, preference)
         .fetch_one(&context.sql_connection)
@@ -126,7 +159,7 @@ impl SillyCommandPDO {
             .await
             .ok_or(anyhow!("Couldn't find command!"))?;
 
-        let id = sqlx::query_file!("./src/sql/silly_commands/add_text.sql", 
+        let id = sqlx::query_file_as!(CommandTextId, "./src/sql/silly_commands/add_text.sql", 
         command.id_silly_command, content)
         .fetch_one(&context.sql_connection)
         .await?;
@@ -143,7 +176,7 @@ impl SillyCommandPDO {
             .await
             .ok_or(anyhow!("Couldn't find command!"))?;
 
-        let id = sqlx::query_file!("./src/sql/silly_commands/add_author_text.sql", command.id_silly_command, content)
+        let id = sqlx::query_file_as!(CommandSelfActionTextId, "./src/sql/silly_commands/add_author_text.sql", command.id_silly_command, content)
         .fetch_one(&context.sql_connection)
         .await?;
 
@@ -168,10 +201,11 @@ impl SillyCommandPDO {
         let file_name = uuid::Uuid::new_v4().to_string();
         let file_path = format!("./assets/{file_name}.{extension}");
         let mut out = File::create(&file_path)?;
+        let preference = preference.unwrap_or("ALL".to_string());
 
         out.write_all(&image[..])?;
 
-        let id = sqlx::query_file!("./src/sql/silly_commands/add_image.sql", command.id_silly_command, file_path, preference)
+        let id = sqlx::query_file_as!(CommandImageId, "./src/sql/silly_commands/add_image.sql", command.id_silly_command, file_path, preference)
         .fetch_one(&context.sql_connection)
         .await?;
 
@@ -194,7 +228,7 @@ impl SillyCommandPDO {
 
         out.write_all(&image[..])?;
 
-        let id = sqlx::query_file!("./src/sql/silly_commands/add_image_author.sql", command.id_silly_command, file_path)
+        let id = sqlx::query_file_as!(CommandSelfActionImageId, "./src/sql/silly_commands/add_image_author.sql", command.id_silly_command, file_path)
         .fetch_one(&context.sql_connection)
         .await?;
 

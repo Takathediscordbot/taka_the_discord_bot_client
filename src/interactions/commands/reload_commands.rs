@@ -4,15 +4,17 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use itertools::Itertools;
 use twilight_interactions::command::CreateCommand;
-use twilight_model::application::command::{CommandOptionType, CommandType, CommandOptionChoice, CommandOptionChoiceValue};
+use twilight_model::application::command::{
+    CommandOptionChoice, CommandOptionChoiceValue, CommandOptionType, CommandType,
+};
 use twilight_model::application::{
     command::Command, command::CommandOption, interaction::application_command::CommandData,
 };
 use twilight_model::gateway::payload::incoming::InteractionCreate;
 use twilight_model::id::marker::CommandVersionMarker;
 use twilight_model::id::Id;
+use twilight_util::builder::InteractionResponseDataBuilder;
 
-use crate::interactions::commands::get_commands;
 use crate::models::silly_command::SillyCommandType;
 use crate::services::silly_command::SillyCommandPDO;
 use crate::{context::Context, utils::box_commands::RunnableCommand};
@@ -23,26 +25,25 @@ pub struct ReloadCommands {}
 
 impl ReloadCommands {
     async fn create_commands(context: Arc<Context>) -> anyhow::Result<Vec<Command>> {
-        let mut v: Vec<Command> = get_commands()
-            .into_iter()
+        let mut v: Vec<Command> = context.commands
+            .iter()
             .map(|a| a.create_command().into())
             .collect_vec();
 
         let commands = SillyCommandPDO::fetch_silly_commands(context).await;
-        
+
         for command in commands.into_iter() {
             let gender_attributes = {
                 let mut old = command.gender_attributes.clone();
-                old.insert(0,"ALL".to_string());
-                old.into_iter().map(|c| {
-                    CommandOptionChoice {
+                old.insert(0, "ALL".to_string());
+                old.into_iter()
+                    .map(|c| CommandOptionChoice {
                         name: c.clone(),
                         name_localizations: None,
                         value: CommandOptionChoiceValue::String(c),
-                    }
-                }).collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
             };
-
 
             let c = Command {
                 application_id: None,
@@ -58,39 +59,46 @@ impl ReloadCommands {
                 nsfw: None,
                 options: match command.command_type {
                     SillyCommandType::AuthorOnly => vec![],
-                    SillyCommandType::SingleUser => vec![CommandOption {
-                        autocomplete: None,
-                        channel_types: None,
-                        choices: None,
-                        description: String::from("A user to target"),
-                        description_localizations: None,
-                        kind: CommandOptionType::User,
-                        max_length: None,
-                        max_value: None,
-                        min_length: None,
-                        min_value: None,
-                        name: String::from("user"),
-                        name_localizations: None,
-                        options: None,
-                        required: Some(true),
-                    }, CommandOption {
-                        autocomplete: None,
-                        channel_types: None,
-                        choices: Some(gender_attributes),
-                        description: String::from("What kind of characters should be shown in the gif"),
-                        description_localizations: None,
-                        kind: CommandOptionType::String,
-                        max_length: None,
-                        max_value: None,
-                        min_length: None,
-                        min_value: None,
-                        name: String::from("preference"),
-                        name_localizations: None,
-                        options: None,
-                        required: Some(true),
-                    }],
+                    SillyCommandType::SingleUser => vec![
+                        CommandOption {
+                            autocomplete: None,
+                            channel_types: None,
+                            choices: None,
+                            description: String::from("A user to target"),
+                            description_localizations: None,
+                            kind: CommandOptionType::User,
+                            max_length: None,
+                            max_value: None,
+                            min_length: None,
+                            min_value: None,
+                            name: String::from("user"),
+                            name_localizations: None,
+                            options: None,
+                            required: Some(true),
+                        },
+                        CommandOption {
+                            autocomplete: None,
+                            channel_types: None,
+                            choices: Some(gender_attributes),
+                            description: String::from(
+                                "What kind of characters should be shown in the gif",
+                            ),
+                            description_localizations: None,
+                            kind: CommandOptionType::String,
+                            max_length: None,
+                            max_value: None,
+                            min_length: None,
+                            min_value: None,
+                            name: String::from("preference"),
+                            name_localizations: None,
+                            options: None,
+                            required: Some(true),
+                        },
+                    ],
                 },
-                version: Id::<CommandVersionMarker>::from(NonZeroU64::new(1).ok_or(anyhow!("Couldn't create command"))?),
+                version: Id::<CommandVersionMarker>::from(
+                    NonZeroU64::new(1).ok_or(anyhow!("Couldn't create command"))?,
+                ),
             };
 
             v.push(c);
@@ -125,10 +133,15 @@ impl RunnableCommand for ReloadCommands {
             )
             .await?;
 
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some("✅ Commands have successfully been reloaded"))?
+        context
+            .response_to_interaction(
+                interaction,
+                InteractionResponseDataBuilder::new()
+                    .content("✅ Commands have successfully been reloaded")                    
+                    .build(),
+            )
             .await?;
+
 
         Ok(Ok(()))
     }

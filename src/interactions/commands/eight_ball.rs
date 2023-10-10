@@ -6,6 +6,7 @@ use twilight_model::{
     application::interaction::application_command::CommandData,
     gateway::payload::incoming::InteractionCreate,
 };
+use twilight_util::builder::InteractionResponseDataBuilder;
 
 use crate::{
     context::Context, utils::{box_commands::RunnableCommand, self},
@@ -57,11 +58,7 @@ impl RunnableCommand for EightBallCommand {
         let embed = utils::create_embed::create_embed(None, Arc::clone(&context)).await?;
 
         let embed = embed.title(question).description(answer).build();
-
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .embeds(Some(&[embed]))?
+        context.response_to_interaction(interaction, InteractionResponseDataBuilder::new().embeds([embed]).build())
             .await?;
 
         Ok(Ok(()))

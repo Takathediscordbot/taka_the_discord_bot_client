@@ -58,7 +58,5 @@ pub fn get_commands() -> Vec<Box<dyn PhantomCommandTrait>> {
         Box::new(PhantomCommand::<ExportSillyCommands>::new()),
         Box::new(PhantomCommand::<AddPreferenceCommand>::new()),
         Box::new(PhantomCommand::<LoadSillyCommandImages>::new()),
-
-
     ]
 }

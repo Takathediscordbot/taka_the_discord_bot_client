@@ -10,7 +10,10 @@ use twilight_model::{
 
 use crate::{
     context::{create_browser, Context},
-    utils::box_commands::{CommandBox, RunnableCommand},
+    utils::{
+        box_commands::{CommandBox, RunnableCommand},
+        timer::Timer,
+    },
 };
 
 use crate::interactions::commands::subcommands::teto::{
@@ -36,67 +39,77 @@ impl RunnableCommand for TetoCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
-        let model = Self::from_interaction(CommandInputData {
-            options: data.options,
-            resolved: data.resolved.map(Cow::Owned),
-        })?;
+        log::info!("teto command");
+        let _command_timer = Timer::new("teto command");
+        let (model, username) = {
+            let _timer = Timer::new("teto fetching username & parsing input");
+            let model = Self::from_interaction(CommandInputData {
+                options: data.options,
+                resolved: data.resolved.map(Cow::Owned),
+            })?;
 
-        let username = match model {
-            TetoCommand::Discord(discord) => {
-                let packet = context
-                    .tetrio_client
-                    .search_user(&discord.user.resolved.id.to_string())
-                    .await?;
+            let username = match &model {
+                TetoCommand::Discord(discord) => {
+                    let packet = context
+                        .tetrio_client
+                        .search_user(&discord.user.resolved.id.to_string())
+                        .await?;
 
-                let Some(data) = &packet.data else {
-                    return Ok(Err(anyhow!("❌ Couldn't find your tetrio id from the discord account, they might have not linked it publicly to their tetrio profile")));
-                };
+                    let Some(data) = &packet.data else {
+                        return Ok(Err(anyhow!("❌ Couldn't find your tetrio id from the discord account, they might have not linked it publicly to their tetrio profile")));
+                    };
 
-                data.user.username.clone()
-            }
-            TetoCommand::Tetrio(tetrio) => {
-                let packet = context
-                    .tetrio_client
-                    .fetch_user_info(&tetrio.tetrio_user.to_lowercase())
-                    .await?;
+                    data.user.username.clone()
+                }
+                TetoCommand::Tetrio(tetrio) => {
+                    let packet = context
+                        .tetrio_client
+                        .fetch_user_info(&tetrio.tetrio_user.to_lowercase())
+                        .await?;
 
-                let Some(data) = &packet.data else {
-                    return Ok(Err(anyhow!("❌ Couldn't find tetrio user")));
-                };
+                    let Some(data) = &packet.data else {
+                        return Ok(Err(anyhow!("❌ Couldn't find tetrio user")));
+                    };
 
-                data.user.username.clone()
-            }
+                    data.user.username.clone()
+                }
+            };
+            (model, username)
         };
 
-        let browser = create_browser().await?;
-        let tab = browser.new_tab()?;
+        let buffer = {
+            let _timer = Timer::new("teto taking screenshot");
+            let browser = create_browser().await?;
+            let tab = browser.new_tab()?;
 
-        tab.set_transparent_background_color()?;
+            tab.set_transparent_background_color()?;
 
-        tab.navigate_to(&format!(
-            "{}/teto_test/{}",
-            context.local_server_url,
-            username.to_lowercase()
-        ))?;
-        log::debug!("navigated to tab");
+            tab.navigate_to(&format!(
+                "{}/teto_test/{}",
+                context.local_server_url,
+                username.to_lowercase()
+            ))?;
+            log::debug!("navigated to tab");
 
-        let element = tab.wait_for_element(".tetra_modal")?;
-        log::debug!("waited for element");
+            let element = tab.wait_for_element(".tetra_modal")?;
+            log::debug!("waited for element");
 
-        let viewport = element.get_box_model()?;
-        let mut viewport = viewport.border_viewport();
-        viewport.x -= 16.0;
-        viewport.y -= 16.0;
-        viewport.width += 32.0;
-        viewport.height += 32.0;
+            let viewport = element.get_box_model()?;
+            let mut viewport = viewport.border_viewport();
+            viewport.x -= 16.0;
+            viewport.y -= 16.0;
+            viewport.width += 32.0;
+            viewport.height += 32.0;
 
-        let buffer = tab.capture_screenshot(
-            CaptureScreenshotFormatOption::Png,
-            None,
-            Some(viewport),
-            true,
-        )?;
-        log::debug!("took screenshot");
+            let buffer = tab.capture_screenshot(
+                CaptureScreenshotFormatOption::Png,
+                None,
+                Some(viewport),
+                true,
+            )?;
+            log::debug!("took screenshot");
+            buffer
+        };
 
         context
             .http_client

@@ -23,6 +23,7 @@ use crate::interactions::commands::subcommands::ts::average_sub_command::Average
 use crate::interactions::commands::subcommands::ts::discord_user_sub_command::DiscordUserSubCommand;
 use crate::interactions::commands::subcommands::ts::stats_sub_command::StatsSubCommand;
 use crate::interactions::commands::subcommands::ts::tetrio_user_sub_command::TetrioUserSubCommand;
+use crate::utils::timer::Timer;
 
 #[derive(CreateCommand, CommandModel)]
 #[command(name = "ts", desc = "Calculate the tetrio stats for a user")]
@@ -550,6 +551,9 @@ impl RunnableCommand for TsCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+        log::info!("ts command");
+        let _command_timer = Timer::new("ts command");
+        
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),

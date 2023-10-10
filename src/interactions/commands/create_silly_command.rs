@@ -75,12 +75,10 @@ impl RunnableCommand for CreateSillyCommand {
         )
         .await?;
 
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some(&format!("Command has been created with id {}\nYou should now try to use /reload_command to see it appear!", result)))?
-            .await?;
-
+        context.response_to_interaction_with_content(interaction, 
+            &format!("Command has been created with id {}\nYou should now try to use /reload_command to see it appear!", result)
+        ).await?;
+        
         Ok(Ok(()))
     }
 }

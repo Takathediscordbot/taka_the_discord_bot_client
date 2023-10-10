@@ -171,8 +171,8 @@ impl RunnableCommand for HelpCommand {
         let embeds = Self::get_command_descriptions_embed(Arc::clone(&context)).await?;
         let buttons = Self::get_buttons();
         let embeds_array = [embeds[0].clone()];
-        context.http_client.interaction(context.application.id).update_response(&interaction.token).embeds(Some(&embeds_array))?.components(Some(&buttons))?.await?;
-
+        context.response_to_interaction(interaction, 
+            InteractionResponseDataBuilder::new().embeds(embeds_array).components(buttons).build()).await?;
         Ok(Ok(()))
     }
 }

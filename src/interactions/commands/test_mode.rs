@@ -42,11 +42,7 @@ impl RunnableCommand for TestMode {
 
         let str = if model.enable { "enabled" } else { "disabled" };
 
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some(&format!("Test mode has been {}!", str)))?
-            .await?;
+        context.response_to_interaction_with_content(interaction, &format!("Test mode has been {}!", str)).await?;
 
         Ok(Ok(()))
     }

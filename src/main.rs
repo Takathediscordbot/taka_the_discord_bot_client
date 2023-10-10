@@ -5,13 +5,15 @@ pub mod models;
 pub mod utils;
 pub mod services;
 use anyhow::anyhow;
+use axum::{Router, response::IntoResponse};
 use context::Context;
 use events::handle_event;
 use flexi_logger::{Logger, FileSpec, WriteMode};
 use futures::StreamExt;
+use itertools::Itertools;
 use sqlx::postgres::PgPoolOptions;
-use twilight_http::Client;
 use std::{str::FromStr, sync::Arc};
+use tower_http::cors::CorsLayer;
 
 use tokio::sync::Mutex;
 use twilight_gateway::{
@@ -20,15 +22,15 @@ use twilight_gateway::{
     Event, Intents, Shard, ShardId,
 };
 
+
+
 use twilight_model::id::Id;
+
+use crate::interactions::commands::get_commands;
 async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
     let tetrio_client = tetrio_api::http::cached_client::CachedClient::default();
         
         // let name = uuid::Uuid::new_v4();
-        let _logger = Logger::try_with_str("warn, taka_the_discord_bot=info")?
-        .log_to_file(FileSpec::default().directory("./logs"))
-        .write_mode(WriteMode::BufferAndFlush)
-        .start()?;
 
         let (discord_client, mut shards) = {
             let token = std::env::var("DISCORD_TOKEN")?;
@@ -88,7 +90,7 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
         //     std::env::var("TETRIO_BOT_PASSWORD")?;
         // let _tetrio_bot_username =
         //     std::env::var("TETRIO_BOT_USERNAME")?;
-
+        println!("creating browser");
         context::create_browser()
             .await?;
 
@@ -115,6 +117,33 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
             tetrio_token: std::env::var("TETRIO_TOKEN")?,
             test_mode: Mutex::new(false),
             sql_connection,
+            commands: get_commands()
+        });
+
+        println!("Hello World!");
+
+        tokio::spawn(async {
+            let ip_bind = std::env::var("BIND_URL").unwrap_or("0.0.0.0:8080".to_string());
+            println!("{ip_bind}");
+            let origins = [
+                "https://health.takathedinosaur.tech/".parse().unwrap()
+            ];
+            let cors = CorsLayer::new()
+                // allow `GET` and `POST` when accessing the resource
+                .allow_methods([reqwest::Method::GET])
+                // allow requests from any origin
+                .allow_origin(origins);
+            // build our application with a route
+            let app = Router::new()
+                // `GET /` goes to `root`
+                .route("/health", axum::routing::get(health_status))     
+                .route("/logs", axum::routing::get(logs))            
+                .layer(cors);
+        
+            // run our app with hyper
+            let _ = axum::Server::bind(&ip_bind.parse().unwrap())
+                .serve(app.into_make_service())
+                .await;
         });
 
         while let Some(data) = events.next().await {
@@ -136,10 +165,35 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
         Ok(Ok(()))
 }
 
+async fn health_status() -> impl IntoResponse {
+    "OK"
+}
+
+
+async fn logs() -> impl IntoResponse {
+    let last_modified_file = std::fs::read_dir("./logs")
+    .expect("Couldn't access local directory")
+    .flatten() // Remove failed
+    .filter(|f| f.metadata().unwrap().is_file()) // Filter out directories (only consider files)
+    .max_by_key(|x| x.metadata().unwrap().modified().unwrap()).unwrap(); // Get the most recently modified file
+
+    let value = std::fs::read_to_string(format!("{}", last_modified_file.path().to_str().unwrap())).unwrap();
+    let return_val: String = value.lines().map(|c| c.to_string()).join("\n");
+    return_val
+}
+
+
+
 
 #[tokio::main]
 async fn main() -> ! {
     dotenvy::dotenv().expect("Couldn't find env vars");
+    let _logger = Logger::try_with_str("warn, taka_the_discord_bot=info").expect("Couldn't initialize logger")
+    .log_to_file(FileSpec::default().directory("./logs"))
+    .write_mode(WriteMode::BufferAndFlush)
+    .start().expect("Couldn't start logger");
+
+    
     loop {
         match run_bot().await {
             Ok(v) => {

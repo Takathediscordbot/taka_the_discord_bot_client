@@ -26,6 +26,7 @@ impl RunnableCommand for ExportSillyCommands {
         _data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+        context.defer_response(interaction).await?;
         let interaction_client = context.http_client.interaction(context.application.id);
       
         let Some(author) = interaction.author_id() else {

@@ -1,21 +1,16 @@
 use std::{borrow::Cow, sync::Arc};
 
 use anyhow::anyhow;
-use twilight_interactions::command::{
-    CommandInputData, CommandModel, CreateCommand,
-};
+use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
 use twilight_model::{
     application::interaction::application_command::CommandData,
-    gateway::payload::incoming::InteractionCreate,
+    gateway::payload::incoming::InteractionCreate, http::interaction::InteractionResponse,
 };
 
 use crate::{
-    context::Context,
-    services::silly_command::SillyCommandPDO,
+    context::Context, services::silly_command::SillyCommandPDO,
     utils::box_commands::RunnableCommand,
 };
-
-
 
 #[derive(CreateCommand, CommandModel)]
 #[command(
@@ -23,12 +18,11 @@ use crate::{
     desc = "Add a preference to a silly command (taka only)"
 )]
 pub struct AddPreferenceCommand {
- 
     /// The name of the command
     name: String,
     /// a
     preference: String,
-} 
+}
 
 #[async_trait::async_trait]
 impl RunnableCommand for AddPreferenceCommand {
@@ -44,20 +38,23 @@ impl RunnableCommand for AddPreferenceCommand {
         })?;
 
         let Some(author) = interaction.author_id() else {
-            return Ok(Err(anyhow!("❌ You're probably not taka")))
+            return Ok(Err(anyhow!("❌ You're probably not taka")));
         };
 
         if author.get() != 434626996262273038 {
             return Ok(Err(anyhow!("❌ You're definitely not taka")));
         }
 
-        SillyCommandPDO::add_preference(Arc::clone(&context), &model.preference, &model.name).await?;
-  
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some(&format!("✅Done! You should now try to use /reload_command to see it appear")))?
+        SillyCommandPDO::add_preference(Arc::clone(&context), &model.preference, &model.name)
             .await?;
+
+        interaction_client
+        .update_response(&interaction.token)
+        .content(Some(&format!(
+            "✅Done! You should now try to use /reload_command to see it appear"
+        )))?
+        .await?;
+    
 
         Ok(Ok(()))
     }

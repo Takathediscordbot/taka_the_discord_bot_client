@@ -21,6 +21,7 @@ use crate::{
             DSPIECE_WEIGHT, DSSECOND_WEIGHT, GARBAGEEFFI_WEIGHT, PPS_WEIGHT, VSAPM_WEIGHT,
             VS_WEIGHT,
         },
+        timer::Timer,
     },
 };
 
@@ -33,12 +34,6 @@ pub struct VsCommand {
     pub dark_mode: bool,
     /// A tetrio user, (pps, apm, vs), discord ping $avgX where X is a rank, e.g S+ or $avgX:COUNTRY_CODE
     pub user_2: Option<String>,
-    /// A tetrio user, (pps, apm, vs), discord ping $avgX where X is a rank, e.g S+ or $avgX:COUNTRY_CODE
-    pub user_3: Option<String>,
-    /// A tetrio user, (pps, apm, vs), discord ping $avgX where X is a rank, e.g S+ or $avgX:COUNTRY_CODE
-    pub user_4: Option<String>,
-    /// A tetrio user, (pps, apm, vs), discord ping $avgX where X is a rank, e.g S+ or $avgX:COUNTRY_CODE
-    pub user_5: Option<String>,
 }
 
 impl VsCommand {
@@ -129,7 +124,7 @@ impl VsCommand {
 
             if strs.clone().count() == 3 {
                 let Some((pps, apm, vs)) = strs.collect_tuple() else {
-                    return Ok(Err(anyhow!("❌ Couldn't parse stats {user}")))
+                    return Ok(Err(anyhow!("❌ Couldn't parse stats {user}")));
                 };
 
                 let pps = if pps.starts_with('(') {
@@ -195,8 +190,14 @@ impl VsCommand {
         };
 
         let id = &data.user.id;
-        let (Some(mut pps), Some(mut apm), Some(mut vs)) = (data.user.league.pps, data.user.league.apm, data.user.league.vs) else {
-            return Ok(Err(anyhow!("❌ {user_name} doesn't have a valid tetra league record ")))
+        let (Some(mut pps), Some(mut apm), Some(mut vs)) = (
+            data.user.league.pps,
+            data.user.league.apm,
+            data.user.league.vs,
+        ) else {
+            return Ok(Err(anyhow!(
+                "❌ {user_name} doesn't have a valid tetra league record "
+            )));
         };
 
         let league_str = if let Some(Ok(mut tetra_league_game)) =
@@ -218,9 +219,7 @@ impl VsCommand {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
 
-            let Some(left) = records.endcontext.iter().find(|a| {
-                &a.user.id == id
-            }) else {
+            let Some(left) = records.endcontext.iter().find(|a| &a.user.id == id) else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
 
@@ -261,23 +260,11 @@ impl VsCommand {
         )))
     }
 
-    pub fn get_background_colors(dark_mode: bool) -> [&'static str; 5] {
+    pub fn get_background_colors(dark_mode: bool) -> [&'static str; 2] {
         if dark_mode {
-            [
-                "rgba(254,190,9,0.7)",
-                "rgba(123,124,132,0.7)",
-                "rgba(132,92,248,0.7)",
-                "rgba(0,0,0,0)",
-                "rgba(0,0,0,0)",
-            ]
+            ["rgba(254,190,9,0.7)", "rgba(123,124,132,0.7)"]
         } else {
-            [
-                "rgba(132,92,248,0.7)",
-                "rgba(123,124,132,0.7)",
-                "rgba(254,148,9,0.7)",
-                "rgba(0,0,0,0)",
-                "rgba(0,0,0,0)",
-            ]
+            ["rgba(132,92,248,0.7)", "rgba(123,124,132,0.7)"]
         }
     }
 
@@ -298,104 +285,119 @@ impl RunnableCommand for VsCommand {
         data: Box<CommandData>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
-        let model = Self::from_interaction(CommandInputData {
-            options: data.options,
-            resolved: data.resolved.map(Cow::Owned),
-        })?;
+        log::info!("vs command");
+        let _command_timer = Timer::new("vs command");
 
-        let result = vec![
-            Some(model.user_1),
-            model.user_2,
-            model.user_3,
-            model.user_4,
-            model.user_5,
-        ]
-        .into_iter()
-        .filter_map(|c| c.map(|c| async { Self::parse_user(c, Arc::clone(&context)).await }))
-        .rev()
-        .collect::<Vec<_>>();
-        let mut result = futures::future::join_all(result).await;
+        let (dark_mode, new_vec) = {
+            let _timer = Timer::new("vs command parsing input");
+            let model = Self::from_interaction(CommandInputData {
+                options: data.options,
+                resolved: data.resolved.map(Cow::Owned),
+            })?;
 
-        let mut new_vec = vec![];
+            let result = vec![Some(model.user_1), model.user_2]
+                .into_iter()
+                .filter_map(|c| {
+                    c.map(|c| async { Self::parse_user(c, Arc::clone(&context)).await })
+                })
+                .rev()
+                .collect::<Vec<_>>();
+            let mut result = futures::future::join_all(result).await;
 
-        loop {
-            let r = match result.pop() {
-                Some(r) => r,
-                None => break,
+            let mut new_vec = vec![];
+
+            loop {
+                let r = match result.pop() {
+                    Some(r) => r,
+                    None => break,
+                };
+
+                new_vec.push(match r? {
+                    Ok(ok) => ok,
+                    Err(err) => return Ok(Err(err)),
+                })
+            }
+
+            (model.dark_mode, new_vec)
+        };
+
+        let (response) = {
+            let background_colors = Self::get_background_colors(dark_mode);
+            let datasets = {
+                let _timer2 = Timer::new("vs calculating stats");
+                let datasets = new_vec
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, v)| (i, v.0, calculate_stats(v.1)))
+                    .map(|(i, label, v)| {
+                        json!({
+                            "label": label,
+                            "data": [
+                                v.apm * APM_WEIGHT,
+                                v.pps * PPS_WEIGHT,
+                                v.vs * VS_WEIGHT,
+                                v.app * APP_WEIGHT,
+                                v.dssecond * DSSECOND_WEIGHT,
+                                v.dspiece * DSPIECE_WEIGHT,
+                                v.dsapppiece * DSAPPPIECE_WEIGHT,
+                                v.vsapm * VSAPM_WEIGHT,
+                                v.cheese * CHEESE_WEIGHT,
+                                v.garbage_effi * GARBAGEEFFI_WEIGHT,
+                            ],
+                            "backgroundColor": background_colors[i],
+                            "borderColor": background_colors[i],
+                            "borderWidth": 0,
+                            "pointRadius": 0
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                datasets
             };
 
-            new_vec.push(match r? {
-                Ok(ok) => ok,
-                Err(err) => return Ok(Err(err)),
-            })
-        }
+            let _timer = Timer::new("vs generating graph");
 
-        let background_colors = Self::get_background_colors(model.dark_mode);
+            let json = json!({
+                "type": "radar",
+                "data": {
+                    "labels": ["APM", "PPS", "VS", "APP", "DS/Second", "DS/Piece", "APP+DS/Piece", "VS/APM", "Cheese\nIndex", "Garbage\nEffi."],
+                    "datasets": datasets
+                },
+                "options":{"legend": { "labels": { "fontColor": Self::get_font_color(dark_mode), "fontSize": 16}}, "scale":{"pointLabels":{"fontColor":Self::get_font_color(dark_mode), "fontSize": 16},"rAxis":{"ticks":{"display":false}},"ticks":{"min":0,"max":180,"stepSize":"30","fontColor":"blue","display":false},"gridLines":{"color":"gray"},"angleLines":{"color":"gray"}}}
+            });
 
-        let datasets = new_vec
-            .into_iter()
-            .enumerate()
-            .map(|(i, v)| (i, v.0, calculate_stats(v.1)))
-            .map(|(i, label, v)| {
-                json!({
-                    "label": label,
-                    "data": [
-                        v.apm * APM_WEIGHT,
-                        v.pps * PPS_WEIGHT,
-                        v.vs * VS_WEIGHT,
-                        v.app * APP_WEIGHT,
-                        v.dssecond * DSSECOND_WEIGHT,
-                        v.dspiece * DSPIECE_WEIGHT,
-                        v.dsapppiece * DSAPPPIECE_WEIGHT,
-                        v.vsapm * VSAPM_WEIGHT,
-                        v.cheese * CHEESE_WEIGHT,
-                        v.garbage_effi * GARBAGEEFFI_WEIGHT,
-                    ],
-                    "backgroundColor": background_colors[i],
-                    "borderColor": background_colors[i],
-                    "borderWidth": 0,
-                    "pointRadius": 0
-                })
-            })
-            .collect::<Vec<_>>();
+            let json = json!({
+                "width": 500,
+                "height": 300,
+                "format": "webp",
+                "background": "transparent",
+                "version": 2,
+                "chart": json
+            });
 
-        let json = json!({
-            "type": "radar",
-            "data": {
-                "labels": ["APM", "PPS", "VS", "APP", "DS/Second", "DS/Piece", "APP+DS/Piece", "VS/APM", "Cheese\nIndex", "Garbage\nEffi."],
-                "datasets": datasets
-            },
-            "options":{"legend": { "labels": { "fontColor": Self::get_font_color(model.dark_mode), "fontSize": 16}}, "scale":{"pointLabels":{"fontColor":Self::get_font_color(model.dark_mode), "fontSize": 16},"rAxis":{"ticks":{"display":false}},"ticks":{"min":0,"max":180,"stepSize":"30","fontColor":"blue","display":false},"gridLines":{"color":"gray"},"angleLines":{"color":"gray"}}}
-        });
+            log::debug!("{json}");
 
-        let json = json!({
-            "width": 500,
-            "height": 300,
-            "format": "webp",
-            "background": "transparent",
-            "version": 2,
-            "chart": json
-        });
+            let response = reqwest::Client::builder()
+                .build()?
+                .post("https://quickchart.io/chart/create")
+                .header("Content-Type", "application/json")
+                .body(json.to_string())
+                .send()
+                .await?
+                .json::<serde_json::Value>()
+                .await?;
 
-        log::debug!("{json}");
-
-        let response = reqwest::Client::builder()
-            .build()?
-            .post("https://quickchart.io/chart/create")
-            .header("Content-Type", "application/json")
-            .body(json.to_string())
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
+            response
+        };
 
         let interaction_client = context.http_client.interaction(context.application.id);
         interaction_client
             .update_response(&interaction.token)
             .content(Some(
                 response
-                    .get("url").ok_or(anyhow!("Couldn't find graph url"))?
-                    .as_str().ok_or(anyhow!("Couldn't find graph url"))?
+                    .get("url")
+                    .ok_or(anyhow!("Couldn't find graph url"))?
+                    .as_str()
+                    .ok_or(anyhow!("Couldn't find graph url"))?,
             ))?
             .await?;
 

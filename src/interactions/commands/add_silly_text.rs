@@ -8,8 +8,8 @@ use twilight_model::{
 };
 
 use crate::{
-    context::Context, 
-    services::silly_command::SillyCommandPDO, utils::box_commands::RunnableCommand,
+    context::Context, services::silly_command::SillyCommandPDO,
+    utils::box_commands::RunnableCommand,
 };
 
 #[derive(CreateCommand, CommandModel)]
@@ -37,7 +37,7 @@ impl RunnableCommand for AddSillyText {
         })?;
 
         let Some(author) = interaction.author_id() else {
-            return Ok(Err(anyhow!("❌ You're probably not taka")))
+            return Ok(Err(anyhow!("❌ You're probably not taka")));
         };
 
         if author.get() != 434626996262273038 {
@@ -50,13 +50,15 @@ impl RunnableCommand for AddSillyText {
             SillyCommandPDO::add_text(Arc::clone(&context), &model.name, &model.text).await?
         };
 
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some(&format!(
-                " Text has been created with id {result} for command {}",
-                model.name
-            )))?
+
+        context
+            .response_to_interaction_with_content(
+                interaction,
+                &format!(
+                    " Text has been created with id {result} for command {}",
+                    model.name
+                ),
+            )
             .await?;
 
         Ok(Ok(()))

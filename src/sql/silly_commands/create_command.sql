@@ -1,5 +1,5 @@
 INSERT 
-INTO silly_command_new 
+INTO silly_commands
 (name, description, command_type, footer_text) 
 VALUES 
 ($1, $2, $3, $4)  

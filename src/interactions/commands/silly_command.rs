@@ -8,12 +8,13 @@ use twilight_model::{
     application::interaction::application_command::CommandData,
     gateway::payload::incoming::InteractionCreate,
 };
+use twilight_util::builder::InteractionResponseDataBuilder;
 
 use crate::{
     context::Context,
     models::silly_command::SillyCommandType,
     services::silly_command::SillyCommandPDO,
-    utils::{box_commands::RunnableCommand, self},
+    utils::{self, box_commands::RunnableCommand},
 };
 
 #[derive(CreateOption, CommandOption, Debug)]
@@ -25,14 +26,10 @@ pub enum SillyCommandTypeOption {
 }
 
 #[derive(CreateCommand, CommandModel)]
-#[command(
-    name = "silly_command",
-    desc = "Get all data of a silly command"
-)]
+#[command(name = "silly_command", desc = "Get all data of a silly command")]
 pub struct SillyCommand {
     /// The name of the command
     name: String,
-
 }
 
 #[async_trait::async_trait]
@@ -48,26 +45,35 @@ impl RunnableCommand for SillyCommand {
             resolved: data.resolved.map(Cow::Owned),
         })?;
 
-        let result = match SillyCommandPDO::fetch_silly_command_by_name(Arc::clone(&context), &model.name)
-        .await {
-            Some(e) => e,
-            None => return Ok(Err(anyhow!("❌ This command does not exist")))
-        };
+        let result =
+            match SillyCommandPDO::fetch_silly_command_by_name(Arc::clone(&context), &model.name)
+                .await
+            {
+                Some(e) => e,
+                None => return Ok(Err(anyhow!("❌ This command does not exist"))),
+            };
+        
 
-        let description = format!("Command type: {}\nImages: {}\nSelf Images: {}\n Texts: {}\n Self Texts: {}", 
-        match result.command_type {
-            SillyCommandType::AuthorOnly => "Author only",
-            SillyCommandType::SingleUser => "Single User"
-        },
-        result.images.len(), result.self_images.len(), result.texts.len(), result.self_texts.len());       
+        let description = format!(
+            "Command type: {}\nImages: {}\nSelf Images: {}\n Texts: {}\n Self Texts: {}",
+            match result.command_type {
+                SillyCommandType::AuthorOnly => "Author only",
+                SillyCommandType::SingleUser => "Single User",
+            },
+            result.images.len(),
+            result.self_images.len(),
+            result.texts.len(),
+            result.self_texts.len()
+        );
 
-        let embed = utils::create_embed::create_embed(None, Arc::clone(&context)).await?; 
+        let embed = utils::create_embed::create_embed(None, Arc::clone(&context)).await?;
         let embed = embed.description(description).build();
 
-        let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .embeds(Some(&[embed]))?
+        context
+            .response_to_interaction(
+                interaction,
+                InteractionResponseDataBuilder::new().embeds([embed]).build(),
+            )
             .await?;
 
         Ok(Ok(()))

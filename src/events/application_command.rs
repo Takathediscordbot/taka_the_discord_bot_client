@@ -4,13 +4,12 @@ use twilight_interactions::command::CreateCommand;
 use twilight_model::{
     application::interaction::application_command::CommandData,
     gateway::payload::incoming::InteractionCreate,
-    http::interaction::{InteractionResponse, InteractionResponseType},
 };
 use twilight_util::builder::embed::EmbedBuilder;
 
 use crate::{
     context::Context,
-    interactions::commands::{get_commands, test_mode::TestMode},
+    interactions::commands::test_mode::TestMode,
     services::silly_command::SillyCommandPDO,
     utils::box_commands::RunnableCommand,
 };
@@ -23,21 +22,7 @@ pub async fn handle_application_command(
     data: Box<CommandData>,
     context: Arc<Context>,
 ) -> anyhow::Result<()> {
-    let interaction_response = InteractionResponse {
-        kind: InteractionResponseType::DeferredChannelMessageWithSource,
-        data: None,
-    };
-
-    let interaction_client = context.http_client.interaction(context.application.id);
-    match interaction_client
-        .create_response(interaction.id, &interaction.token, &interaction_response)
-        .await
-    {
-        Ok(_) => {}
-        Err(e) => {
-            log::error!("{e}");
-        }
-    };
+ 
 
     let name = data.name.as_str();
     if name == TestMode::NAME {
@@ -56,7 +41,7 @@ pub async fn handle_application_command(
         }
     }
 
-    let command = get_commands().into_iter().find(|a| a.get_name() == name);
+    let command = context.commands.iter().find(|a| a.get_name() == name);
 
     let result = if let Some(command) = command {
         command

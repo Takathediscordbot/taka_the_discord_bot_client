@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Instant};
 
-use anyhow::anyhow;
 use twilight_interactions::command::CreateCommand;
 use twilight_model::{
     application::interaction::application_command::CommandData,
@@ -23,18 +22,9 @@ impl RunnableCommand for PingCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         let interaction_client = context.http_client.interaction(context.application.id);
 
-        let message = if let Some(channel) = &interaction.channel {
-            context
-                .http_client
-                .create_message(channel.id)
-                .content("Pong!")?
-                .await?
-                .model()
-                .await?
-        } else {
-            return Ok(Err(anyhow!("❌ Couldn't send message")));
-        };
-
+        context
+                .response_to_interaction_with_content(interaction, "Pong!").await?;
+        
         let it = interaction_client
             .response(&interaction.token)
             .await?
@@ -45,15 +35,11 @@ impl RunnableCommand for PingCommand {
         let interaction_sent_at = (snowflake >> 22) + 1420070400000;
         let snowflake = it.id.get();
         let response_sent_at = (snowflake >> 22) + 1420070400000;
-        let snowflake = message.id.get();
-        let message_sent_at = (snowflake >> 22) + 1420070400000;
         let ping = response_sent_at - interaction_sent_at;
-        let response_time = message_sent_at - response_sent_at;
-        let total_time = message_sent_at - interaction_sent_at;
 
         let gateway_ping = {
             let start = Instant::now();
-            let url = context.http_client.gateway().authed().await?;
+            let url = context.http_client.gateway().await?;
             let duration = start.elapsed();
             log::debug!("{}", url.status());
             duration
@@ -61,9 +47,7 @@ impl RunnableCommand for PingCommand {
 
         interaction_client
             .update_response(&interaction.token)
-            .content(Some(&format!("Pong!\nPing: {}ms\nResponse updated after: {}ms\nTotal Response time: {}ms\nGateway ping: {}ms", ping, response_time, total_time, gateway_ping.as_millis())))?
-            .await?
-            .model()
+            .content(Some(&format!("Pong!\nPing: {}ms\nGateway ping: {}ms", ping, gateway_ping.as_millis())))?
             .await?;
 
         Ok(Ok(()))

@@ -1,6 +1,12 @@
 DROP VIEW IF EXISTS silly_commands_data_new;
 DROP TABLE IF EXISTS silly_command_new;
 
+CREATE TABLE IF NOT EXISTS silly_command_type (
+       "id_silly_command_type" SERIAL,
+       name VARCHAR(100),
+       PRIMARY KEY("id_silly_command_type", "name")
+);
+
 CREATE TABLE IF NOT EXISTS silly_command_new (
 	"id_silly_command" SERIAL,
 	"name" VARCHAR(100) NOT NULL,
