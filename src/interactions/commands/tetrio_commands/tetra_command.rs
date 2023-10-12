@@ -39,6 +39,7 @@ impl RunnableCommand for TetraCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("tetra command");
         let _command_timer = Timer::new("tetra command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
 
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -126,6 +127,8 @@ impl RunnableCommand for TetraCommand {
             tab.close(true)?;
             buffer
         };
+
+        thread.await??;
 
         context
             .http_client

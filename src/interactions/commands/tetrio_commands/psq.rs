@@ -110,6 +110,7 @@ impl RunnableCommand for PsqCommand {
 
         log::info!("psq command");
         let _command_timer = Timer::new("psq command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
 
         let model = GraphUser::from_interaction(CommandInputData {
             options: data.options,
@@ -138,7 +139,7 @@ impl RunnableCommand for PsqCommand {
         let url = Self::graph_with_stats(&data.name, data.dark_mode, data.stats).await?;
 
         let content = format!("{replay_str}\n{url}");
-
+        thread.await??;
         context
             .http_client
             .interaction(context.application.id)

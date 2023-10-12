@@ -125,6 +125,8 @@ impl RunnableCommand for SqCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("sq command");
         let _command_timer = Timer::new("sq command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+
         let model = GraphUser::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
@@ -152,6 +154,8 @@ impl RunnableCommand for SqCommand {
         let url = Self::graph_with_stats(&data.name, data.dark_mode, data.stats).await?;
 
         let content = format!("{replay_str}\n{url}");
+
+        thread.await??;
 
         context
             .http_client

@@ -41,6 +41,8 @@ impl RunnableCommand for TetoCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("teto command");
         let _command_timer = Timer::new("teto command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+
         let (model, username) = {
             let _timer = Timer::new("teto fetching username & parsing input");
             let model = Self::from_interaction(CommandInputData {
@@ -111,6 +113,7 @@ impl RunnableCommand for TetoCommand {
             buffer
         };
 
+        thread.await??;
         context
             .http_client
             .interaction(context.application.id)

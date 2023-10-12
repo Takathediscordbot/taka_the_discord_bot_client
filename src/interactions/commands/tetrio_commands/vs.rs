@@ -287,7 +287,7 @@ impl RunnableCommand for VsCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("vs command");
         let _command_timer = Timer::new("vs command");
-
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
         let (dark_mode, new_vec) = {
             let _timer = Timer::new("vs command parsing input");
             let model = Self::from_interaction(CommandInputData {
@@ -389,6 +389,7 @@ impl RunnableCommand for VsCommand {
             response
         };
 
+        thread.await??;
         let interaction_client = context.http_client.interaction(context.application.id);
         interaction_client
             .update_response(&interaction.token)

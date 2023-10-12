@@ -65,6 +65,7 @@ impl RunnableCommand for VsrCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("VSR Command");
         let _command_timer = Timer::new("vsr command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
         let (dark_mode, background_colors, new_vec) = {
             let _timer = Timer::new("vsr parsing data");
             let model = Self::from_interaction(CommandInputData {
@@ -190,7 +191,9 @@ impl RunnableCommand for VsrCommand {
             response
         };
 
+        thread.await??;
         let interaction_client = context.http_client.interaction(context.application.id);
+        
         interaction_client
             .update_response(&interaction.token)
             .content(Some(

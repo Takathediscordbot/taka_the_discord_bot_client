@@ -48,11 +48,9 @@ impl RunnableCommand for AddPreferenceCommand {
         SillyCommandPDO::add_preference(Arc::clone(&context), &model.preference, &model.name)
             .await?;
 
-        interaction_client
-        .update_response(&interaction.token)
-        .content(Some(&format!(
+        context.response_to_interaction_with_content(interaction, &format!(
             "✅Done! You should now try to use /reload_command to see it appear"
-        )))?
+        ))
         .await?;
     
 

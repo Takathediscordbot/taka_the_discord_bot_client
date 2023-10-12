@@ -11,7 +11,7 @@ use crate::{
     context::Context,
     interactions::commands::test_mode::TestMode,
     services::silly_command::SillyCommandPDO,
-    utils::box_commands::RunnableCommand,
+    utils::{box_commands::RunnableCommand, timer::Timer},
 };
 
 use super::silly_command::handle_silly_command;
@@ -22,25 +22,9 @@ pub async fn handle_application_command(
     data: Box<CommandData>,
     context: Arc<Context>,
 ) -> anyhow::Result<()> {
- 
+    let _timer = Timer::new("handle_application_command");
 
     let name = data.name.as_str();
-    if name == TestMode::NAME {
-        TestMode::run(shard, interaction, data, Arc::clone(&context)).await??;
-        return Ok(());
-    }
-
-    {
-        let test_mode = *context.test_mode.lock().await;
-        if test_mode {
-            if let Some(channel) = &interaction.channel {
-                context.http_client.create_message(channel.id).content("❌ Test mode is enabled and the command will be ignored\nIf you think this is not intentional message @Taka#4011 on discord.")?.await?;
-            }
-
-            return Ok(());
-        }
-    }
-
     let command = context.commands.iter().find(|a| a.get_name() == name);
 
     let result = if let Some(command) = command {
@@ -52,10 +36,9 @@ pub async fn handle_application_command(
     {
         handle_silly_command(shard, interaction, data, command, Arc::clone(&context)).await
     } else {
-        let Err(e) = context.http_client.interaction(context.application.id)
-        .update_response(&interaction.token)
-        .content(Some("❌ Unhandled command: this command has not yet been implemented"))
-        ?.await else {
+
+        let Err(e) = context.response_to_interaction_with_content(interaction,"❌ Unhandled command: this command has not yet been implemented")
+        .await else {
             return Ok(());
         };
 
@@ -69,17 +52,66 @@ pub async fn handle_application_command(
             .description(format!("{result:?}"))
             .build()];
         let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(None)?
-            .embeds(Some(embeds))?
-            .await?;
+        
+            match interaction_client.response(&interaction.token).await {
+                Ok(response) => {
+                    let status = response.status();
+                    if status.is_success() {
+                        interaction_client
+                        .update_response(&interaction.token)
+                        .embeds(Some(embeds))?
+                        .await?;
+                    }
+                    else {
+                        match &interaction.channel {
+                            Some(channel) => context.http_client.create_message(channel.id)
+                            .embeds(embeds)?
+                            .await?,
+                            None => return Ok(())
+                        };
+                    }
+                }
+                Err(_) => {
+                    match &interaction.channel {
+                        Some(channel) => context.http_client.create_message(channel.id)
+                        .embeds(embeds)?
+                        .await?,
+                        None => return Ok(())
+                    };
+                }
+            };
     } else if let Ok(Err(result)) = result {
         let interaction_client = context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .content(Some(&result.to_string()))?
-            .await?;
+
+        match interaction_client.response(&interaction.token).await {
+            Ok(response) => {
+                let status = response.status();
+                if status.is_success() {
+                    interaction_client
+                    .update_response(&interaction.token)
+                    .content(Some(&result.to_string()))?
+                    .await?;
+                }
+                else {
+                    match &interaction.channel {
+                        Some(channel) => context.http_client.create_message(channel.id)
+                        .content(&result.to_string())?
+                        .await?,
+                        None => return Ok(())
+                    };
+                }
+            }
+            Err(_) => {
+                match &interaction.channel {
+                    Some(channel) => context.http_client.create_message(channel.id)
+                    .content(&result.to_string())?
+                    .await?,
+                    None => return Ok(())
+                };
+            }
+        };
+        
+
     }
 
     Ok(())

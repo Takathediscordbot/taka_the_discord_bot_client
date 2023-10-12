@@ -52,6 +52,7 @@ impl TsCommand {
         tetra_league_round: Option<i64>,
         context: Arc<Context>,
     ) -> anyhow::Result<anyhow::Result<()>> {
+
         let tetrio_user = context.tetrio_client.fetch_user_info(&id).await?;
 
         let Some(data) = &tetrio_user.data else {
@@ -553,7 +554,7 @@ impl RunnableCommand for TsCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("ts command");
         let _command_timer = Timer::new("ts command");
-        
+        context.defer_response(interaction).await?;        
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),

@@ -155,6 +155,7 @@ impl RunnableCommand for VstCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("VST Command");
         let _command_timer = Timer::new("vst command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
@@ -466,6 +467,8 @@ impl RunnableCommand for VstCommand {
             final_str
         };
         log::debug!("{}", final_str.len());
+
+        thread.await??;
 
         let interaction_client = context.http_client.interaction(context.application.id);
         let r = interaction_client

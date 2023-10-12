@@ -204,6 +204,8 @@ impl RunnableCommand for LbCommand {
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("lb command");
         let _command_timer = Timer::new("lb command");
+        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
@@ -245,6 +247,8 @@ impl RunnableCommand for LbCommand {
             .join("\n");
 
         let content = format!("```\n{content}\n```");
+
+        thread.await??;
 
         let interaction_client = context.http_client.interaction(context.application.id);
         let r = interaction_client

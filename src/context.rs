@@ -1,10 +1,10 @@
-use std::time::Duration;
+use std::{time::Duration, sync::Arc};
 
 use headless_chrome::{Browser, LaunchOptions};
 use tetrio_api::http::cached_client::CachedClient;
 use tokio::sync::Mutex;
 use twilight_http::Client;
-use twilight_model::{guild::Guild, oauth::Application, http::interaction::{InteractionResponse, InteractionResponseType, InteractionResponseData}, gateway::payload::incoming::InteractionCreate};
+use twilight_model::{guild::Guild, oauth::Application, http::interaction::{InteractionResponse, InteractionResponseType, InteractionResponseData}, gateway::payload::incoming::InteractionCreate, id::{marker::InteractionMarker, Id}};
 
 use crate::utils::box_commands::PhantomCommandTrait;
 
@@ -25,15 +25,30 @@ pub struct Context {
 impl Context {
 
     pub async fn defer_response(&self, interaction: &InteractionCreate) -> Result<(), twilight_http::error::Error>  {
+        self.defer_response_with(interaction.id, &interaction.token).await
+    }
+
+    pub async fn defer_response_with(&self, id: Id<InteractionMarker>, token: &str) -> Result<(), twilight_http::error::Error> {
         let interaction_response = InteractionResponse {
             kind: InteractionResponseType::DeferredChannelMessageWithSource,
             data: None,
         };
     
         let interaction_client = self.http_client.interaction(self.application.id);
+        
         interaction_client
-            .create_response(interaction.id, &interaction.token, &interaction_response)
+            .create_response(id, token, &interaction_response)
             .await.map(|_| ())
+    }
+
+    pub fn threaded_defer_response(context: Arc<Self>, interaction: &InteractionCreate)
+        -> tokio::task::JoinHandle<Result<(), twilight_http::Error>>
+     {
+        let id = interaction.id;
+        let token = interaction.token.clone();
+        return tokio::spawn(async move {
+            context.defer_response_with(id, &token).await
+        });
     }
 
     pub async fn response_to_interaction(&self, interaction:&InteractionCreate, content: InteractionResponseData) -> Result<(), twilight_http::error::Error> {

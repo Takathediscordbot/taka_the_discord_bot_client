@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use rand::prelude::*;
+use rand::seq::IteratorRandom;
 use std::{ffi::OsStr, path::Path, sync::Arc};
 
 use twilight_model::{
@@ -20,7 +21,7 @@ async fn handle_author_silly_command(
     command: crate::models::silly_command::SillyCommandData,
     context: Arc<Context>,
 ) -> Result<Result<(), anyhow::Error>, anyhow::Error> {
-
+    let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
     let Some(author_id) = interaction.author_id() else {
         return Ok(Err(anyhow!("❌ Couldn't find command author.")))
     };
@@ -48,6 +49,7 @@ async fn handle_author_silly_command(
 
     let embed = embed.build();
 
+    thread.await??;
     context
         .http_client
         .interaction(context.application.id)
@@ -65,6 +67,8 @@ async fn handle_single_user_silly_command(
     command: crate::models::silly_command::SillyCommandData,
     context: Arc<Context>,
 ) -> std::result::Result<std::result::Result<(), anyhow::Error>, anyhow::Error> {
+    let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+    
     let Some(a) = data.options.iter().find(|a| &a.name == "user") else {
         return Ok(Err(anyhow!("❌ Command has to be reloaded, tell taka.")))
     };
@@ -125,7 +129,14 @@ async fn handle_single_user_silly_command(
             }
         }
         else {
-            SillyCommandPDO::fetch_random_silly_image_by_name_and_preference(Arc::clone(&context), command.id_silly_command, &preference).await?
+
+            let mut rng = rand::thread_rng(); 
+            match command.images.iter().filter(|image| {
+                image.as_str() == preference
+            }).choose(&mut rng) {
+                Some(image) => image.clone(),
+                None => return Ok(Err(anyhow!("❌ No images have been added yet."))),
+            }
         };
 
 
@@ -185,6 +196,8 @@ async fn handle_single_user_silly_command(
             })
             .build();
 
+        
+        thread.await??;
         let interaction_client = &context.http_client.interaction(context.application.id);
         interaction_client
             .update_response(&interaction.token)
