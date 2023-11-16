@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 
 use twilight_interactions::command::{CommandModel, CreateCommand};
@@ -24,7 +24,7 @@ impl RunnableCommand for ExportSillyCommands {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         context.defer_response(interaction).await?;
         let interaction_client = context.http_client.interaction(context.application.id);
@@ -38,7 +38,7 @@ impl RunnableCommand for ExportSillyCommands {
         }
 
 
-        let commands = SillyCommandPDO::fetch_silly_commands(Arc::clone(&context)).await;
+        let commands = SillyCommandPDO::fetch_silly_commands(&context).await;
 
         let json = serde_json::to_string(&commands)?;
         let content = json.into_bytes();

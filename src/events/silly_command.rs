@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use rand::prelude::*;
-use rand::seq::IteratorRandom;
-use std::{ffi::OsStr, path::Path, sync::Arc};
+use std::{ffi::OsStr, path::Path};
 
 use twilight_model::{
     application::interaction::application_command::{CommandData, CommandOptionValue},
@@ -9,7 +8,7 @@ use twilight_model::{
     gateway::payload::incoming::InteractionCreate,
     http::attachment::Attachment,
 };
-use twilight_util::builder::embed::{EmbedBuilder, ImageSource};
+use twilight_util::builder::{embed::{EmbedBuilder, ImageSource}, InteractionResponseDataBuilder};
 
 use crate::{
     context::Context, services::silly_command::SillyCommandPDO, utils::create_embed::create_embed,
@@ -19,9 +18,9 @@ async fn handle_author_silly_command(
     interaction: &InteractionCreate,
     _data: Box<CommandData>,
     command: crate::models::silly_command::SillyCommandData,
-    context: Arc<Context>,
+    context: &Context,
 ) -> Result<Result<(), anyhow::Error>, anyhow::Error> {
-    let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+
     let Some(author_id) = interaction.author_id() else {
         return Ok(Err(anyhow!("❌ Couldn't find command author.")))
     };
@@ -43,20 +42,17 @@ async fn handle_author_silly_command(
     }
     .replace("{author}", &format!("<@{}>", author_id.get()));
 
-    let (embed, attachment) = create_embed_image(Arc::clone(&context), image, &text).await?;
+    let (embed, attachment) = create_embed_image(&context, image, &text).await?;
 
     let image_bytes = { std::fs::read(image)? };
 
     let embed = embed.build();
 
-    thread.await??;
-    context
-        .http_client
-        .interaction(context.application.id)
-        .update_response(&interaction.token)
-        .attachments(&[Attachment::from_bytes(attachment, image_bytes, 1)])?
-        .embeds(Some(&[embed]))?
-        .await?;
+    let content = InteractionResponseDataBuilder::new()
+    .attachments([Attachment::from_bytes(attachment, image_bytes, 1)])
+    .embeds([embed]);
+
+    context.response_to_interaction(&interaction, content.build()).await?;
 
     Ok(Ok(()))
 }
@@ -65,10 +61,8 @@ async fn handle_single_user_silly_command(
     interaction: &InteractionCreate,
     data: Box<CommandData>,
     command: crate::models::silly_command::SillyCommandData,
-    context: Arc<Context>,
+    context: &Context,
 ) -> std::result::Result<std::result::Result<(), anyhow::Error>, anyhow::Error> {
-    let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
-    
     let Some(a) = data.options.iter().find(|a| &a.name == "user") else {
         return Ok(Err(anyhow!("❌ Command has to be reloaded, tell taka.")))
     };
@@ -107,19 +101,19 @@ async fn handle_single_user_silly_command(
         .replace("{author}", &format!("<@{}>", author_id.get()))
         .replace("{user}", &format!("<@{}>", user.get()));
 
-        let (embed, attachment) = create_embed_image(Arc::clone(&context), image, &text).await?;
+        let (embed, attachment) = create_embed_image(&context, image, &text).await?;
 
         let image_bytes = { std::fs::read(image)? };
 
         let embed = embed.build();
 
-        context
-            .http_client
-            .interaction(context.application.id)
-            .update_response(&interaction.token)
-            .attachments(&[Attachment::from_bytes(attachment, image_bytes, 1)])?
-            .embeds(Some(&[embed]))?
-            .await?;
+        let content = InteractionResponseDataBuilder::new()
+        .attachments([Attachment::from_bytes(attachment, image_bytes, 1)])
+        .embeds([embed])
+        ;
+
+        context.response_to_interaction(&interaction, content.build()).await?;
+
     } else {
         let image = if preference == "ALL" {
             if !command.images.is_empty() {
@@ -129,14 +123,7 @@ async fn handle_single_user_silly_command(
             }
         }
         else {
-
-            let mut rng = rand::thread_rng(); 
-            match command.images.iter().filter(|image| {
-                image.as_str() == preference
-            }).choose(&mut rng) {
-                Some(image) => image.clone(),
-                None => return Ok(Err(anyhow!("❌ No images have been added yet."))),
-            }
+            SillyCommandPDO::fetch_random_silly_image_by_name_and_preference(&context, command.id_silly_command, &preference).await?
         };
 
 
@@ -148,20 +135,20 @@ async fn handle_single_user_silly_command(
         .replace("{author}", &format!("<@{}>", author_id.get()))
         .replace("{user}", &format!("<@{}>", user.get()));
 
-        let (embed, attachment) = create_embed_image(Arc::clone(&context), &image, &text).await?;
+        let (embed, attachment) = create_embed_image(&context, &image, &text).await?;
 
         let image_bytes = { std::fs::read(image)? };
         
         let _ = {
             if let None = SillyCommandPDO::fetch_command_usage(
-                Arc::clone(&context),
+                &context,
                 command.id_silly_command,
                 author_id.get(),
                 user.get(),
             )
             .await {
                 let _ = SillyCommandPDO::create_command_usage(
-                    Arc::clone(&context),
+                    &context,
                     command.id_silly_command,
                     author_id.get(),
                     user.get(),
@@ -177,7 +164,7 @@ async fn handle_single_user_silly_command(
         let user_name = context.http_client.user(user).await?.model().await?.name;
 
         let usages = SillyCommandPDO::increment_command_usage(
-            Arc::clone(&context),
+            &context,
             command.id_silly_command,
             author_id.get(),
             user.get(),
@@ -196,21 +183,13 @@ async fn handle_single_user_silly_command(
             })
             .build();
 
-        
-        thread.await??;
-        let interaction_client = &context.http_client.interaction(context.application.id);
-        interaction_client
-            .update_response(&interaction.token)
-            .attachments(&[Attachment::from_bytes(attachment, image_bytes, 1)])?
-            .embeds(Some(&[embed]))?
-            .await?;
-
-        let _response = interaction_client
-            .create_followup(&interaction.token)
-            .content(&format!("<@{}>", user.get()))?
-            .await?
-            .model()
-            .await?;
+        let content = InteractionResponseDataBuilder::new()
+        .attachments([Attachment::from_bytes(attachment, image_bytes, 1)])
+        .embeds([embed])
+        .content(format!("<@{}>", user.get()))
+        ;
+    
+        context.response_to_interaction(&interaction, content.build()).await?;
 
 
     };
@@ -219,11 +198,11 @@ async fn handle_single_user_silly_command(
 }
 
 async fn create_embed_image(
-    context: Arc<Context>,
+    context: &Context,
     image: &str,
     text: &str,
 ) -> anyhow::Result<(EmbedBuilder, String)> {
-    let embed = create_embed(None, Arc::clone(&context)).await?;
+    let embed = create_embed(None, &context).await?;
     let img = Path::new(&image)
         .file_name()
         .and_then(OsStr::to_str)
@@ -239,7 +218,7 @@ pub async fn handle_silly_command(
     interaction: &InteractionCreate,
     data: Box<CommandData>,
     command: crate::models::silly_command::SillyCommandData,
-    context: Arc<Context>,
+    context: &Context,
 ) -> Result<Result<(), anyhow::Error>, anyhow::Error> {
     match command.command_type {
         crate::models::silly_command::SillyCommandType::AuthorOnly => {

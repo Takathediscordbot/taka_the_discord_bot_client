@@ -1,5 +1,5 @@
 use std::num::NonZeroU64;
-use std::sync::Arc;
+
 
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -24,7 +24,7 @@ use crate::{context::Context, utils::box_commands::RunnableCommand};
 pub struct ReloadCommands {}
 
 impl ReloadCommands {
-    async fn create_commands(context: Arc<Context>) -> anyhow::Result<Vec<Command>> {
+    async fn create_commands(context: &Context) -> anyhow::Result<Vec<Command>> {
         let mut v: Vec<Command> = context.commands
             .iter()
             .map(|a| a.create_command().into())
@@ -100,8 +100,9 @@ impl ReloadCommands {
                     NonZeroU64::new(1).ok_or(anyhow!("Couldn't create command"))?,
                 ),
             };
-
             v.push(c);
+
+
         }
 
         Ok(v)
@@ -114,7 +115,7 @@ impl RunnableCommand for ReloadCommands {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let Some(author) = interaction.author_id() else {
             return Ok(Err(anyhow!("❌ You're probably not taka")));
@@ -129,7 +130,7 @@ impl RunnableCommand for ReloadCommands {
         interaction_client
             .set_guild_commands(
                 context.test_guild.id,
-                &Self::create_commands(Arc::clone(&context)).await?,
+                &Self::create_commands(&context).await?,
             )
             .await?;
 

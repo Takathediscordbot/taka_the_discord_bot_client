@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fs::DirEntry, sync::Arc};
+use std::{borrow::Cow, fs::DirEntry};
 
 use twilight_interactions::command::{CommandModel, CreateCommand};
 use twilight_model::{
@@ -65,7 +65,7 @@ impl RunnableCommand for LoadSillyCommandImages {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         context.defer_response(interaction).await?;
         let interaction_client = context.http_client.interaction(context.application.id);
@@ -78,7 +78,7 @@ impl RunnableCommand for LoadSillyCommandImages {
             return Ok(Err(anyhow::anyhow!("❌ You're definitely not taka")));
         }
 
-        let commands = SillyCommandPDO::fetch_silly_commands(Arc::clone(&context)).await;
+        let commands = SillyCommandPDO::fetch_silly_commands(&context).await;
 
         let Ok(silly_command_folder) = std::fs::read_dir("./assets/silly_commands") else {
             return Ok(Err(anyhow::anyhow!("❌ Couldn't read silly_commands folder")));
@@ -140,7 +140,7 @@ impl RunnableCommand for LoadSillyCommandImages {
 
                 if !command.gender_attributes.contains(&preference_name) {
                     SillyCommandPDO::add_preference(
-                        Arc::clone(&context),
+                        &context,
                         &preference_name,
                         &command.name,
                     )
@@ -176,7 +176,7 @@ impl RunnableCommand for LoadSillyCommandImages {
                     let extension = extension.to_string_lossy();
 
                     SillyCommandPDO::add_image(
-                        Arc::clone(&context),
+                        &context,
                         &command.name,
                         file_content,
                         &extension,

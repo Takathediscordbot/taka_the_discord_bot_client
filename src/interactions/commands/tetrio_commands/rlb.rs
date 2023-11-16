@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -46,11 +46,11 @@ impl RunnableCommand for RLbCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("rlb command");
         let _command_timer = Timer::new("rlb command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),

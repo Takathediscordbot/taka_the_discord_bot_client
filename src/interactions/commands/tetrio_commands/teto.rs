@@ -1,7 +1,7 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
-use headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption;
+use headless_chrome::{protocol::cdp::Page::CaptureScreenshotFormatOption, LaunchOptions};
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
 use twilight_model::{
     application::interaction::application_command::CommandData,
@@ -9,7 +9,7 @@ use twilight_model::{
 };
 
 use crate::{
-    context::{create_browser, Context},
+    context::Context,
     utils::{
         box_commands::{CommandBox, RunnableCommand},
         timer::Timer,
@@ -37,19 +37,19 @@ impl RunnableCommand for TetoCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("teto command");
         let _command_timer = Timer::new("teto command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        context.defer_response(interaction).await?;
+        let model = Self::from_interaction(CommandInputData {
+            options: data.options,
+            resolved: data.resolved.map(Cow::Owned),
+        })?;
 
-        let (model, username) = {
+        let username = {
             let _timer = Timer::new("teto fetching username & parsing input");
-            let model = Self::from_interaction(CommandInputData {
-                options: data.options,
-                resolved: data.resolved.map(Cow::Owned),
-            })?;
-
+          
             let username = match &model {
                 TetoCommand::Discord(discord) => {
                     let packet = context
@@ -76,12 +76,26 @@ impl RunnableCommand for TetoCommand {
                     data.user.username.clone()
                 }
             };
-            (model, username)
+            username
         };
 
         let buffer = {
             let _timer = Timer::new("teto taking screenshot");
-            let browser = create_browser().await?;
+            let launch_options = LaunchOptions::default_builder()
+            .headless(true)
+            // .fetcher_options(FetcherOptions::default().with_revision(browser_version))
+            .window_size(Some((
+                900,
+                500,
+            )))
+            .sandbox(false)
+            .build()?;
+
+
+            log::debug!("made configuration");
+
+            let browser = headless_chrome::Browser::new(launch_options)?;
+
             let tab = browser.new_tab()?;
 
             tab.set_transparent_background_color()?;
@@ -113,7 +127,6 @@ impl RunnableCommand for TetoCommand {
             buffer
         };
 
-        thread.await??;
         context
             .http_client
             .interaction(context.application.id)

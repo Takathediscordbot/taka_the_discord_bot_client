@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 use rand::prelude::*;
 
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
@@ -28,7 +28,7 @@ impl RunnableCommand for RngCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let model = Self::from_interaction(CommandInputData {
             options: data.options,

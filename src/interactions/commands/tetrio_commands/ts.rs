@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::sync::Arc;
+
 
 use anyhow::anyhow;
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
@@ -50,7 +50,7 @@ impl TsCommand {
         show_details: bool,
         tetra_league_game: Option<i64>,
         tetra_league_round: Option<i64>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
 
         let tetrio_user = context.tetrio_client.fetch_user_info(&id).await?;
@@ -78,7 +78,7 @@ impl TsCommand {
             };
 
             let Some(left) = records.endcontext.iter().find(|a| {
-                &a.user.id == id
+                &a.get_id().unwrap_or("".into()) == id
             }) else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
@@ -112,7 +112,7 @@ impl TsCommand {
         };
 
         let avatar_revision = data.user.avatar_revision.unwrap_or(0);
-        let builder = create_embed(None, Arc::clone(&context)).await?
+        let builder = create_embed(None, &context).await?
             .title(username.to_uppercase())
             .url(format!("https://ch.tetr.io/u/{username}"))
             .description(format!("Takathebot - A bot attempting to copy sheetBot and but hiyajo maho but somehow does things in a better yet worse way.\n{}", tetra_league_game_str))
@@ -173,9 +173,9 @@ impl TsCommand {
     pub async fn with_stats(
         stats: StatsSubCommand,
         interaction: &InteractionCreate,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
-        let builder = create_embed(None, Arc::clone(&context)).await?
+        let builder = create_embed(None, &context).await?
             .title(format!("ADVANCED STATS FOR VALUES OF [APM = {}, PPS = {}, VS = {}]", stats.apm, stats.pps, stats.vs))
             .description("Takathebot - A bot attempting to copy sheetBot and but hiyajo maho but somehow does things in a better yet worse way.")
             ;
@@ -211,7 +211,7 @@ impl TsCommand {
     pub async fn with_average_stats(
         average: AverageSubCommand,
         interaction: &InteractionCreate,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let country_str = average
             .country
@@ -221,7 +221,7 @@ impl TsCommand {
         let stats = average_of_rank(
             average.rank.clone().map(|rank| rank.into()),
             average.country.map(|c| c.to_uppercase()),
-            Arc::clone(&context),
+            &context,
         )
         .await?;
 
@@ -238,7 +238,7 @@ impl TsCommand {
             .map(|rank| rank.value())
             .unwrap_or("ALL");
 
-        let builder = create_embed(None, Arc::clone(&context)).await?
+        let builder = create_embed(None, &context).await?
             .title(format!("AVERAGE STATS OF RANK {} {country_str}", rank))
             .description("Takathebot - A bot attempting to copy sheetBot and but hiyajo maho but somehow does things in a better yet worse way.")
             ;
@@ -550,7 +550,7 @@ impl RunnableCommand for TsCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("ts command");
         let _command_timer = Timer::new("ts command");
@@ -577,7 +577,7 @@ impl RunnableCommand for TsCommand {
                     discord.details.unwrap_or(false),
                     discord.tetra_league_game,
                     discord.tetra_league_round,
-                    Arc::clone(&context),
+                    &context,
                 )
                 .await
             }
@@ -588,15 +588,15 @@ impl RunnableCommand for TsCommand {
                     tetrio.details.unwrap_or(false),
                     tetrio.tetra_league_game,
                     tetrio.tetra_league_round,
-                    Arc::clone(&context),
+                    &context,
                 )
                 .await
             }
             TsCommand::Stats(stats) => {
-                Self::with_stats(stats, interaction, Arc::clone(&context)).await
+                Self::with_stats(stats, interaction, &context).await
             }
             TsCommand::Average(average) => {
-                Self::with_average_stats(average, interaction, Arc::clone(&context)).await
+                Self::with_average_stats(average, interaction, &context).await
             }
         }
     }

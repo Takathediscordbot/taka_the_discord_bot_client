@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -55,7 +55,7 @@ impl VsCommand {
 
     pub async fn parse_user(
         user: String,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<(String, PlayerStats)>> {
         let user = user.trim();
         if user.starts_with("$avg") {
@@ -169,7 +169,7 @@ impl VsCommand {
     async fn parse_tetrio_user(
         user_name: &str,
         params: Vec<&str>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<(String, PlayerStats)>> {
         let user = context
             .tetrio_client
@@ -219,7 +219,7 @@ impl VsCommand {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
 
-            let Some(left) = records.endcontext.iter().find(|a| &a.user.id == id) else {
+            let Some(left) = records.endcontext.iter().find(|a| &a.get_id().unwrap_or("".into()) == id) else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
 
@@ -283,11 +283,11 @@ impl RunnableCommand for VsCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("vs command");
         let _command_timer = Timer::new("vs command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
         let (dark_mode, new_vec) = {
             let _timer = Timer::new("vs command parsing input");
             let model = Self::from_interaction(CommandInputData {
@@ -298,7 +298,7 @@ impl RunnableCommand for VsCommand {
             let result = vec![Some(model.user_1), model.user_2]
                 .into_iter()
                 .filter_map(|c| {
-                    c.map(|c| async { Self::parse_user(c, Arc::clone(&context)).await })
+                    c.map(|c| async { Self::parse_user(c, &context).await })
                 })
                 .rev()
                 .collect::<Vec<_>>();
@@ -321,7 +321,7 @@ impl RunnableCommand for VsCommand {
             (model.dark_mode, new_vec)
         };
 
-        let (response) = {
+        let response = {
             let background_colors = Self::get_background_colors(dark_mode);
             let datasets = {
                 let _timer2 = Timer::new("vs calculating stats");

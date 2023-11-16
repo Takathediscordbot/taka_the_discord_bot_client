@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 use anyhow::anyhow;
 use tetrio_api::models::users::user_rank::UserRank;
@@ -10,7 +10,7 @@ use super::stats::PlayerStatsUnwrapped;
 pub async fn average_of_rank(
     rank: Option<UserRank>,
     country: Option<String>,
-    context: Arc<Context>,
+    context: &Context,
 ) -> anyhow::Result<anyhow::Result<(PlayerStatsUnwrapped, usize, f64)>> {
     let packet = context
         .tetrio_client

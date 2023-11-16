@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::{marker::PhantomData, ops::Deref, sync::Arc};
+use std::{marker::PhantomData, ops::Deref};
 pub use twilight_interactions::command::{CommandModel, CreateCommand};
 use twilight_model::{
     application::interaction::application_command::CommandData,
@@ -15,7 +15,7 @@ pub trait RunnableCommand {
         shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>>;
 }
 
@@ -47,7 +47,7 @@ pub trait PhantomCommandTrait: Send + Sync {
         shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>>;
 }
 
@@ -66,7 +66,7 @@ impl<T: CreateCommand + RunnableCommand + Send + Sync> PhantomCommandTrait for P
         shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         T::run(shard, interaction, data, context).await
     }

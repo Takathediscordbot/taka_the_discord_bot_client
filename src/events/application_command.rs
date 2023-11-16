@@ -1,40 +1,34 @@
-use std::sync::Arc;
-
-use twilight_interactions::command::CreateCommand;
 use twilight_model::{
-    application::interaction::application_command::CommandData,
+    application::{interaction::application_command::CommandData, command::CommandType},
     gateway::payload::incoming::InteractionCreate,
 };
 use twilight_util::builder::embed::EmbedBuilder;
 
 use crate::{
     context::Context,
-    interactions::commands::test_mode::TestMode,
     services::silly_command::SillyCommandPDO,
-    utils::{box_commands::RunnableCommand, timer::Timer},
+    utils::timer::Timer,
 };
 
 use super::silly_command::handle_silly_command;
 
-pub async fn handle_application_command(
+pub async fn handle_chat_command(
     shard: u64,
     interaction: &InteractionCreate,
     data: Box<CommandData>,
-    context: Arc<Context>,
+    context: &Context,
 ) -> anyhow::Result<()> {
-    let _timer = Timer::new("handle_application_command");
-
     let name = data.name.as_str();
     let command = context.commands.iter().find(|a| a.get_name() == name);
 
     let result = if let Some(command) = command {
         command
-            .run(shard, interaction, data, Arc::clone(&context))
+            .run(shard, interaction, data, &context)
             .await
     } else if let Some(command) =
-        SillyCommandPDO::fetch_silly_command_by_name(Arc::clone(&context), name).await
+        SillyCommandPDO::fetch_silly_command_by_name(&context, name).await
     {
-        handle_silly_command(shard, interaction, data, command, Arc::clone(&context)).await
+        handle_silly_command(shard, interaction, data, command, &context).await
     } else {
 
         let Err(e) = context.response_to_interaction_with_content(interaction,"❌ Unhandled command: this command has not yet been implemented")
@@ -115,4 +109,18 @@ pub async fn handle_application_command(
     }
 
     Ok(())
+}
+
+pub async fn handle_application_command(
+    shard: u64,
+    interaction: &InteractionCreate,
+    data: Box<CommandData>,
+    context: &Context,
+) -> anyhow::Result<()> {
+    let _timer = Timer::new("handle_application_command");
+    
+    match data.kind {
+        CommandType::ChatInput => handle_chat_command(shard, interaction, data, context).await,
+        _ => Ok(())
+    }
 }

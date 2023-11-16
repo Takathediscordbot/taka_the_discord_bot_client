@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc, time::UNIX_EPOCH};
+use std::{fmt::Display, time::UNIX_EPOCH};
 
 use twilight_model::{channel::message::embed::EmbedAuthor, util::Timestamp};
 use twilight_util::builder::embed::{EmbedBuilder, ImageSource};
@@ -24,7 +24,7 @@ pub fn set_image_if_exists(embed: EmbedBuilder, avatar: Option<ImageSource>) -> 
 
 pub async fn create_embed(
     color: Option<u32>,
-    context: Arc<Context>,
+    context: &Context,
 ) -> anyhow::Result<EmbedBuilder> {
     let bot_user = context.http_client.current_user().await?.model().await?;
 

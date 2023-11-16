@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -61,11 +61,11 @@ impl RunnableCommand for VsrCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("VSR Command");
         let _command_timer = Timer::new("vsr command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
         let (dark_mode, background_colors, new_vec) = {
             let _timer = Timer::new("vsr parsing data");
             let model = Self::from_interaction(CommandInputData {
@@ -76,7 +76,7 @@ impl RunnableCommand for VsrCommand {
             let result = vec![Some(model.user_1), model.user_2]
                 .into_iter()
                 .filter_map(|c| {
-                    c.map(|c| async { VsCommand::parse_user(c, Arc::clone(&context)).await })
+                    c.map(|c| async { VsCommand::parse_user(c, &context).await })
                 })
                 .rev()
                 .collect::<Vec<_>>();

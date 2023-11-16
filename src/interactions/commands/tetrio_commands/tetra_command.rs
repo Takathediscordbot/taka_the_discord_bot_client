@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use std::sync::Arc;
+
 
 use anyhow::anyhow;
 use headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption;
@@ -35,11 +35,11 @@ impl RunnableCommand for TetraCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("tetra command");
         let _command_timer = Timer::new("tetra command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
 
         let model = Self::from_interaction(CommandInputData {
             options: data.options,

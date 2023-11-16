@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -39,7 +39,7 @@ pub enum VstCommand {
 impl VstCommand {
     pub async fn from_discord_user(
         user: &ResolvedUser,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<(String, Stats)>> {
         let tetrio_user = context
             .tetrio_client
@@ -59,7 +59,7 @@ impl VstCommand {
 
     pub async fn from_tetrio_user(
         user: &str,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<(String, Stats)>> {
         let tetrio_user = context.tetrio_client.fetch_user_info(user).await?;
 
@@ -102,7 +102,7 @@ impl VstCommand {
     async fn from_average(
         rank: Option<UserRankOption>,
         country: Option<String>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<(String, Stats)>> {
         let stats = average_of_rank(
             rank.clone().map(|r| r.into()),
@@ -151,11 +151,11 @@ impl RunnableCommand for VstCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("VST Command");
         let _command_timer = Timer::new("vst command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
@@ -165,25 +165,25 @@ impl RunnableCommand for VstCommand {
             let (left, right) = match model {
                 VstCommand::Discord(discord) => match discord {
                     discord::DiscordSubCommandGroup::Discord(discord) => (
-                        Self::from_discord_user(&discord.user1, Arc::clone(&context)).await,
-                        Self::from_discord_user(&discord.user2, Arc::clone(&context)).await,
+                        Self::from_discord_user(&discord.user1, &context).await,
+                        Self::from_discord_user(&discord.user2, &context).await,
                     ),
                     discord::DiscordSubCommandGroup::Stats(stats) => (
-                        Self::from_discord_user(&stats.discord_user, Arc::clone(&context)).await,
+                        Self::from_discord_user(&stats.discord_user, &context).await,
                         Self::from_stats(stats.pps, stats.apm, stats.vs).await,
                     ),
                 },
                 VstCommand::Tetrio(tetrio) => match tetrio.as_ref() {
                     tetrio::TetrioSubCommandGroup::Discord(discord) => (
-                        Self::from_tetrio_user(&discord.tetrio_user, Arc::clone(&context)).await,
-                        Self::from_discord_user(&discord.discord_user, Arc::clone(&context)).await,
+                        Self::from_tetrio_user(&discord.tetrio_user, &context).await,
+                        Self::from_discord_user(&discord.discord_user, &context).await,
                     ),
                     tetrio::TetrioSubCommandGroup::Tetrio(tetrio) => (
-                        Self::from_tetrio_user(&tetrio.user1, Arc::clone(&context)).await,
-                        Self::from_tetrio_user(&tetrio.user2, Arc::clone(&context)).await,
+                        Self::from_tetrio_user(&tetrio.user1, &context).await,
+                        Self::from_tetrio_user(&tetrio.user2, &context).await,
                     ),
                     tetrio::TetrioSubCommandGroup::Stats(stats) => (
-                        Self::from_tetrio_user(&stats.tetrio_user, Arc::clone(&context)).await,
+                        Self::from_tetrio_user(&stats.tetrio_user, &context).await,
                         Self::from_stats(stats.pps, stats.apm, stats.vs).await,
                     ),
                 },
@@ -199,25 +199,25 @@ impl RunnableCommand for VstCommand {
                         Self::from_average(
                             data.average_rank.clone(),
                             data.average_country.clone(),
-                            Arc::clone(&context),
+                            &context,
                         )
                         .await,
                     ),
                     average::AverageSubCommandGroup::Discord(data) => (
-                        Self::from_discord_user(&data.discord_user, Arc::clone(&context)).await,
+                        Self::from_discord_user(&data.discord_user, &context).await,
                         Self::from_average(
                             data.average_rank.clone(),
                             data.average_country.clone(),
-                            Arc::clone(&context),
+                            &context,
                         )
                         .await,
                     ),
                     average::AverageSubCommandGroup::Tetrio(data) => (
-                        Self::from_tetrio_user(&data.tetrio_user, Arc::clone(&context)).await,
+                        Self::from_tetrio_user(&data.tetrio_user, &context).await,
                         Self::from_average(
                             data.average_rank,
                             data.average_country,
-                            Arc::clone(&context),
+                            &context,
                         )
                         .await,
                     ),
@@ -225,13 +225,13 @@ impl RunnableCommand for VstCommand {
                         Self::from_average(
                             data.average_rank1,
                             data.average_country1,
-                            Arc::clone(&context),
+                            &context,
                         )
                         .await,
                         Self::from_average(
                             data.average_rank2,
                             data.average_country2,
-                            Arc::clone(&context),
+                            &context,
                         )
                         .await,
                     ),

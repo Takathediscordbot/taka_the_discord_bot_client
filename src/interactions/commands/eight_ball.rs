@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 use rand::prelude::*;
 
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
@@ -37,7 +37,7 @@ impl RunnableCommand for EightBallCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -55,7 +55,7 @@ impl RunnableCommand for EightBallCommand {
             NO_OPTIONS[rand::thread_rng().gen_range(0..NO_OPTIONS.len())]
         };
 
-        let embed = utils::create_embed::create_embed(None, Arc::clone(&context)).await?;
+        let embed = utils::create_embed::create_embed(None, &context).await?;
 
         let embed = embed.title(question).description(answer).build();
         context.response_to_interaction(interaction, InteractionResponseDataBuilder::new().embeds([embed]).build())

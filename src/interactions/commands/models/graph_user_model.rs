@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 use anyhow::anyhow;
 use tetrio_api::models::users::user_rank::UserRank;
@@ -93,7 +93,7 @@ struct User {
 impl GraphUser {
     async fn from_discord_user(
         discord_data: &CommandBox<DiscordUserSubCommand>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         let user = context
             .tetrio_client
@@ -111,14 +111,14 @@ impl GraphUser {
                 tetra_league_round: discord_data.tetra_league_round,
             },
             discord_data.dark_mode,
-            Arc::clone(&context),
+            &context,
         )
         .await
     }
 
     async fn from_tetrio_user(
         request_data: &TetrioUserSubCommand,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         Self::from_user(
             User {
@@ -127,7 +127,7 @@ impl GraphUser {
                 tetra_league_round: request_data.tetra_league_round,
             },
             request_data.dark_mode,
-            Arc::clone(&context),
+            &context,
         )
         .await
     }
@@ -139,7 +139,7 @@ impl GraphUser {
             tetra_league_round,
         }: User,
         dark_mode: bool,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         let tetrio_user = context.tetrio_client.fetch_user_info(&username).await?;
 
@@ -169,7 +169,7 @@ impl GraphUser {
             };
 
             let Some(left) = records.endcontext.iter().find(|a| {
-                &a.user.id == id
+                &a.get_id().unwrap_or("".into()) == id
             }) else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
@@ -213,7 +213,7 @@ impl GraphUser {
 
     async fn from_stats(
         data: &StatsSubCommand,
-        _context: Arc<Context>,
+        _context: &Context,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         Ok(Ok(GraphUserData {
             name: format!("{},{},{}", data.pps, data.apm, data.vs),
@@ -234,7 +234,7 @@ impl GraphUser {
 
     async fn from_average(
         average: &AverageSubCommand,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         let country_str = average
             .country
@@ -252,7 +252,7 @@ impl GraphUser {
         let stats = average_of_rank(
             average.rank.clone().map(|rank| rank.into()),
             average.country.clone().map(|c| c.to_uppercase()),
-            Arc::clone(&context),
+            &context,
         )
         .await?;
         let rank_str = format!("$avg{}{}", rank_str, country_str);
@@ -275,7 +275,7 @@ impl GraphUser {
 
     pub async fn get_data(
         &self,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         match self {
             GraphUser::Discord(discord) => Self::from_discord_user(discord, context).await,

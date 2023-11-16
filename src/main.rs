@@ -8,13 +8,14 @@ use anyhow::anyhow;
 use axum::{Router, response::IntoResponse};
 use context::Context;
 use events::handle_event;
-use flexi_logger::{Logger, FileSpec, WriteMode};
+use flexi_logger::{Logger, FileSpec, WriteMode, TS_DASHES_BLANK_COLONS_DOT_BLANK, DeferredNow};
 use futures::StreamExt;
 use itertools::Itertools;
+use log::Record;
 use sqlx::postgres::PgPoolOptions;
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tower_http::cors::CorsLayer;
-
+use chatgpt::prelude::{ChatGPT, ChatGPTEngine, ModelConfigurationBuilder};
 use tokio::sync::Mutex;
 use twilight_gateway::{
     error::ReceiveMessageError,
@@ -25,6 +26,10 @@ use twilight_gateway::{
 
 
 use twilight_model::id::Id;
+
+
+
+
 
 use crate::interactions::commands::get_commands;
 async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
@@ -94,19 +99,30 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
         context::create_browser()
             .await?;
 
+        let openai_prompt = include_str!("./assets/prompt");
+        let openai_token =
+            &std::env::var("OPENAI_TOKEN")?;        
+
+ 
+
+        let chatgpt = ChatGPT::new_with_config(openai_token, 
+            (&mut ModelConfigurationBuilder::default())
+                .engine(ChatGPTEngine::Gpt35Turbo_0301)
+                .timeout(Duration::from_secs(600))
+                .build()?
+        )?;
+
         let sql_connection_url =
-            &std::env::var("DATABASE_URL")?;
-        let sql_connection = PgPoolOptions::new()
-            .max_connections(25)
-            .connect(sql_connection_url)
-            .await?;
+        &std::env::var("DATABASE_URL")?;
+    let sql_connection = PgPoolOptions::new()
+        .max_connections(25)
+        .connect(sql_connection_url)
+        .await?;
 
-        let row: (i64,) = sqlx::query_as("SELECT $1")
-            .bind(150_i64)
-            .fetch_one(&sql_connection)
-            .await?;
-
-        log::info!("{row:?}; SQL database initialized!");
+    let row: (i64,) = sqlx::query_as("SELECT $1")
+        .bind(150_i64)
+        .fetch_one(&sql_connection)
+        .await?;
 
         let context = Arc::new(Context {
             application: discord_application,
@@ -117,8 +133,15 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
             tetrio_token: std::env::var("TETRIO_TOKEN")?,
             test_mode: Mutex::new(false),
             sql_connection,
-            commands: get_commands()
+            commands: get_commands(),
+            openai_prompt,
+            chatgpt_client: chatgpt,
+            ai_channel: std::env::var("AI_CHANNEL")?.parse()?
         });
+
+
+
+    log::info!("{row:?}; SQL database initialized!");
 
         println!("Hello World!");
 
@@ -146,6 +169,7 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
                 .await;
         });
 
+
         while let Some(data) = events.next().await {
             let (shard, event): (ShardRef<'_>, Result<Event, ReceiveMessageError>) = data;
             let id = shard.id().number();
@@ -156,10 +180,19 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
                     if e.is_fatal() {
                         return Ok(Err(anyhow!(e)));
                     };
+                    
                     continue;
                 }
             };
-            tokio::spawn(handle_event(id, event, Arc::clone(&context)));
+            let context = Arc::clone(&context);
+            tokio::spawn(async move {
+                match handle_event(id, event, context).await {
+                    Ok(_) => {},
+                    Err(e) => log::error!("{e:?}")
+                };
+
+
+            });
         };
 
         Ok(Ok(()))
@@ -184,6 +217,20 @@ async fn logs() -> impl IntoResponse {
 
 
 
+pub fn my_own_format(
+    w: &mut dyn std::io::Write,
+    now: &mut DeferredNow,
+    record: &Record,
+) -> Result<(), std::io::Error> {
+    write!(
+        w,
+        "{} [Thread {}] Severity {}, Message: {}",
+        now.format(TS_DASHES_BLANK_COLONS_DOT_BLANK),
+        std::thread::current().name().unwrap_or("<unnamed>"),
+        record.level(),
+        &record.args()
+    )
+}
 
 #[tokio::main]
 async fn main() -> ! {
@@ -191,6 +238,7 @@ async fn main() -> ! {
     let _logger = Logger::try_with_str("warn, taka_the_discord_bot=info").expect("Couldn't initialize logger")
     .log_to_file(FileSpec::default().directory("./logs"))
     .write_mode(WriteMode::BufferAndFlush)
+    .format(my_own_format)
     .start().expect("Couldn't start logger");
 
     

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use twilight_interactions::command::{
@@ -46,7 +46,7 @@ impl RunnableCommand for CreateSillyCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -67,7 +67,7 @@ impl RunnableCommand for CreateSillyCommand {
         };
 
         let result = SillyCommandPDO::create_command(
-            Arc::clone(&context),
+            &context,
             &model.name,
             &model.description,
             &model.footer_text,

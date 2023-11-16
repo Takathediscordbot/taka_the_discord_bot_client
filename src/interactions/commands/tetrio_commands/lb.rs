@@ -200,11 +200,11 @@ impl RunnableCommand for LbCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("lb command");
         let _command_timer = Timer::new("lb command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
         
         let model = Self::from_interaction(CommandInputData {
             options: data.options,

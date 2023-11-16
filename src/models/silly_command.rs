@@ -101,6 +101,7 @@ impl TryFrom<i32> for SillyCommandType {
 
 impl SillyCommandData {}
 
+#[derive(FromRow)]
 pub struct Usages {
     pub usages: i32
 }

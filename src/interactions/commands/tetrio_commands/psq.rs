@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::sync::Arc;
+
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -105,19 +105,19 @@ impl RunnableCommand for PsqCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
 
         log::info!("psq command");
         let _command_timer = Timer::new("psq command");
-        let thread = Context::threaded_defer_response(Arc::clone(&context), interaction);
+        let thread = Context::threaded_defer_response(&context, interaction);
 
         let model = GraphUser::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
         })?;
 
-        let data = model.get_data(Arc::clone(&context)).await?;
+        let data = model.get_data(&context).await?;
 
         let data = match data {
             Ok(data) => data,

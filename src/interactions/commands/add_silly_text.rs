@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
@@ -29,7 +29,7 @@ impl RunnableCommand for AddSillyText {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -45,9 +45,9 @@ impl RunnableCommand for AddSillyText {
         }
 
         let result = if model.author {
-            SillyCommandPDO::add_text_author(Arc::clone(&context), &model.name, &model.text).await?
+            SillyCommandPDO::add_text_author(&context, &model.name, &model.text).await?
         } else {
-            SillyCommandPDO::add_text(Arc::clone(&context), &model.name, &model.text).await?
+            SillyCommandPDO::add_text(&context, &model.name, &model.text).await?
         };
 
 

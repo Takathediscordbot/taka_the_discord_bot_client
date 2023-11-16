@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ffi::OsStr, path::Path, sync::Arc};
+use std::{borrow::Cow, ffi::OsStr, path::Path};
 
 use anyhow::anyhow;
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
@@ -31,7 +31,7 @@ impl RunnableCommand for AddSillyImage {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -59,11 +59,11 @@ impl RunnableCommand for AddSillyImage {
             .await?
             .to_vec();
         let result = if model.author {
-            SillyCommandPDO::add_image_author(Arc::clone(&context), &model.name, bytes, file_type)
+            SillyCommandPDO::add_image_author(&context, &model.name, bytes, file_type)
                 .await?
         } else {
             SillyCommandPDO::add_image(
-                Arc::clone(&context),
+                &context,
                 &model.name,
                 bytes,
                 file_type,

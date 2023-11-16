@@ -1,54 +1,93 @@
-use std::{time::Duration, sync::Arc};
-
+use std::{time::Duration, future::IntoFuture};
+use chatgpt::prelude::ChatGPT;
 use headless_chrome::{Browser, LaunchOptions};
 use tetrio_api::http::cached_client::CachedClient;
-use tokio::sync::Mutex;
-use twilight_http::Client;
+use tokio::sync::{Mutex, OnceCell};
+use twilight_http::{Client, request::Request, routing::Route, response::marker::EmptyBody};
 use twilight_model::{guild::Guild, oauth::Application, http::interaction::{InteractionResponse, InteractionResponseType, InteractionResponseData}, gateway::payload::incoming::InteractionCreate, id::{marker::InteractionMarker, Id}};
 
 use crate::utils::box_commands::PhantomCommandTrait;
+
+static UNAUTHED_CLIENT: OnceCell<Client> = OnceCell::const_new();
+
+struct UnauthedClient;
+
+impl UnauthedClient {
+    pub async fn get() -> &'static Client  {
+
+
+        return UNAUTHED_CLIENT.get_or_init(|| async {
+            return Client::builder().build()
+        }).await
+    }
+}
+
 
 pub struct Context {
     pub http_client: Client,
     pub tetrio_client: CachedClient,
     pub application: Application,
     pub test_guild: Guild,
+    pub ai_channel: u64,
     pub local_server_url: String,
     pub tetrio_token: String,
     pub test_mode: Mutex<bool>,
     pub sql_connection: sqlx::postgres::PgPool,
-    pub commands: Vec<Box<dyn PhantomCommandTrait>>
+    pub commands: Vec<Box<dyn PhantomCommandTrait>>,
+    pub openai_prompt: &'static str,
+    pub chatgpt_client: ChatGPT
 }
-
 
 
 impl Context {
 
     pub async fn defer_response(&self, interaction: &InteractionCreate) -> Result<(), twilight_http::error::Error>  {
-        self.defer_response_with(interaction.id, &interaction.token).await
+        self.defer_response_with(interaction.id, interaction.token.clone()).await
     }
 
-    pub async fn defer_response_with(&self, id: Id<InteractionMarker>, token: &str) -> Result<(), twilight_http::error::Error> {
+    async fn __defer_response_with(id: Id<InteractionMarker>, token: String) -> Result<(), twilight_http::error::Error> {
+
         let interaction_response = InteractionResponse {
             kind: InteractionResponseType::DeferredChannelMessageWithSource,
             data: None,
         };
-    
-        let interaction_client = self.http_client.interaction(self.application.id);
+
+        let mut request = Request::builder(&Route::InteractionCallback {
+            interaction_id: id.get(),
+            interaction_token: &token,
+        });
+
+        request = request.use_authorization_token(false);
         
+        request = request.json(&interaction_response)?;
+
+        let request = request.build();
+        
+        UnauthedClient::get().await.request::<twilight_http::response::Response<EmptyBody>>(request).into_future().await.map(|_| ())
+    }
+
+    pub async fn defer_response_with(&self, id: Id<InteractionMarker>, token: String) -> Result<(), twilight_http::error::Error> {
+        let interaction_client = self.http_client.interaction(self.application.id);
+
+        let interaction_response = InteractionResponse {
+            kind: InteractionResponseType::DeferredChannelMessageWithSource,
+            data: None,
+        };
+
         interaction_client
-            .create_response(id, token, &interaction_response)
+            .create_response(id, &token, &interaction_response)
             .await.map(|_| ())
     }
 
-    pub fn threaded_defer_response(context: Arc<Self>, interaction: &InteractionCreate)
+    pub fn threaded_defer_response(&self, interaction: &InteractionCreate)
         -> tokio::task::JoinHandle<Result<(), twilight_http::Error>>
      {
+
         let id = interaction.id;
         let token = interaction.token.clone();
-        return tokio::spawn(async move {
-            context.defer_response_with(id, &token).await
-        });
+        return tokio::spawn(
+            Self::__defer_response_with(id, token)
+        );
     }
 
     pub async fn response_to_interaction(&self, interaction:&InteractionCreate, content: InteractionResponseData) -> Result<(), twilight_http::error::Error> {

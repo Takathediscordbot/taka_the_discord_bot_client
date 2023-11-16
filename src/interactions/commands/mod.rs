@@ -35,10 +35,10 @@ pub mod load_silly_command_images;
 
 pub fn get_commands() -> Vec<Box<dyn PhantomCommandTrait>> {
     vec![
+        Box::new(PhantomCommand::<TetoCommand>::new()),
+        Box::new(PhantomCommand::<TetraCommand>::new()),
         Box::new(PhantomCommand::<PingCommand>::new()),
         Box::new(PhantomCommand::<ReloadCommands>::new()),
-        Box::new(PhantomCommand::<TetraCommand>::new()),
-        Box::new(PhantomCommand::<TetoCommand>::new()),
         Box::new(PhantomCommand::<TsCommand>::new()),
         Box::new(PhantomCommand::<VstCommand>::new()),
         Box::new(PhantomCommand::<VsCommand>::new()),

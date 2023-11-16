@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 use twilight_interactions::command::CreateCommand;
 use twilight_model::{gateway::payload::incoming::InteractionCreate, application::interaction::application_command::CommandData, channel::message::{Embed, embed::EmbedFooter, Component, component::{Button, ActionRow}, ReactionType}, http::interaction::{InteractionResponse, InteractionResponseType}};
@@ -20,8 +20,8 @@ use super::tetrio_commands;
 pub struct HelpCommand;
 
 impl HelpCommand {
-    async fn get_command_descriptions_embed(context: Arc<Context>) -> anyhow::Result<Vec<Embed>> {
-        let default_embed = create_embed(None, Arc::clone(&context)).await?;
+    async fn get_command_descriptions_embed(context: &Context) -> anyhow::Result<Vec<Embed>> {
+        let default_embed = create_embed(None, &context).await?;
         let first_page_embed = default_embed.clone()
             
             .title("Thanks & Calculations".to_string())
@@ -42,7 +42,7 @@ impl HelpCommand {
             .build();
 
 
-        let silly_commands = SillyCommandPDO::fetch_silly_commands(Arc::clone(&context)).await;
+        let silly_commands = SillyCommandPDO::fetch_silly_commands(&context).await;
         let silly_command_embed = default_embed.clone();
         let mut silly_command_description = String::new();
         for command in silly_commands.into_iter() {
@@ -79,7 +79,7 @@ impl HelpCommand {
         
     }
 
-    pub async fn previous(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: Arc<Context>) -> anyhow::Result<()> {
+    pub async fn previous(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: &Context) -> anyhow::Result<()> {
         let Some(message) = &it.message else {
             return Ok(())
        };
@@ -88,7 +88,7 @@ impl HelpCommand {
             return Ok(())
        };
 
-       let embeds = Self::get_command_descriptions_embed(Arc::clone(&context)).await?;
+       let embeds = Self::get_command_descriptions_embed(&context).await?;
        let Some(current) = embeds.iter().position(|a| match &a.footer {
             None => false,
             Some(e) => e.text == footer.text 
@@ -121,7 +121,7 @@ impl HelpCommand {
         Ok(())
     }
 
-    pub async fn next(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: Arc<Context>) -> anyhow::Result<()> {
+    pub async fn next(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: &Context) -> anyhow::Result<()> {
        
        let Some(message) = &it.message else {
             return Ok(())
@@ -131,7 +131,7 @@ impl HelpCommand {
             return Ok(())
        };
 
-       let embeds = Self::get_command_descriptions_embed(Arc::clone(&context)).await?;
+       let embeds = Self::get_command_descriptions_embed(&context).await?;
        let Some(current) = embeds.iter().position(|a| match &a.footer {
             None => false,
             Some(e) => e.text == footer.text 
@@ -166,9 +166,9 @@ impl RunnableCommand for HelpCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>>{
-        let embeds = Self::get_command_descriptions_embed(Arc::clone(&context)).await?;
+        let embeds = Self::get_command_descriptions_embed(&context).await?;
         let buttons = Self::get_buttons();
         let embeds_array = [embeds[0].clone()];
         context.response_to_interaction(interaction, 

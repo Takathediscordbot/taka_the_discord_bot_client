@@ -1,10 +1,10 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
 use twilight_model::{
     application::interaction::application_command::CommandData,
-    gateway::payload::incoming::InteractionCreate, http::interaction::InteractionResponse,
+    gateway::payload::incoming::InteractionCreate,
 };
 
 use crate::{
@@ -30,7 +30,7 @@ impl RunnableCommand for AddPreferenceCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: Arc<Context>,
+        context: &Context,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -45,7 +45,7 @@ impl RunnableCommand for AddPreferenceCommand {
             return Ok(Err(anyhow!("❌ You're definitely not taka")));
         }
 
-        SillyCommandPDO::add_preference(Arc::clone(&context), &model.preference, &model.name)
+        SillyCommandPDO::add_preference(&context, &model.preference, &model.name)
             .await?;
 
         context.response_to_interaction_with_content(interaction, &format!(
