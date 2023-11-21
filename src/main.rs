@@ -124,6 +124,11 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
         .fetch_one(&sql_connection)
         .await?;
 
+
+
+        let ai_channel: u64 = std::env::var("AI_CHANNEL")?.parse()?;
+    
+
         let context = Arc::new(Context {
             application: discord_application,
             http_client: discord_client,
@@ -136,7 +141,7 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
             commands: get_commands(),
             openai_prompt,
             chatgpt_client: chatgpt,
-            ai_channel: std::env::var("AI_CHANNEL")?.parse()?
+            ai_channel
         });
 
 

@@ -156,7 +156,7 @@ async fn handle_single_user_silly_command(
                 .await;
             }
         };
-
+       
         let author_name = &interaction
             .author()
             .ok_or(anyhow!("❌ Couldn't find author"))?
@@ -191,6 +191,98 @@ async fn handle_single_user_silly_command(
     
         context.response_to_interaction(&interaction, content.build()).await?;
 
+        if user.get() != context.application.id.get()  {
+            return Ok(Ok(()))
+        }
+
+
+        if let Some(channel) = &interaction.channel {
+            let _ = context
+                .http_client
+                .create_typing_trigger(channel.id)
+                .await;
+        }
+
+        let author_name_2 = interaction
+            .author()
+            .map(|author| author.name.clone())
+            .unwrap_or(String::from("An unknown user"));
+
+        let author_nickname = interaction.member
+        .as_ref()
+        .map(|member| member.nick.clone())
+        .flatten()
+        .unwrap_or(author_name_2.clone());
+
+
+        let prompt = include_str!("../assets/silly_command_prompt");
+
+        let Ok(ai_message) = context
+        .chatgpt_client
+        .new_conversation()
+        .send_message(
+            format!("You are currently talking to {} (Also referred to as {}). {}. ",
+                author_nickname, 
+                author_name_2,
+                prompt.replacen("{command_name}", &command.name, 1)
+            )
+        ).await else {
+            log::error!("Couldn't generate ai message to respond to silly command.");
+            return Ok(Ok(()))
+        };
+
+        let Some(message) = ai_message.message_choices.get(0) else {
+            log::error!("Couldn't generate ai message to respond to silly command.");
+            return Ok(Ok(()))
+        };
+
+        let message_content = &message.message.content;
+
+        let image = if preference == "ALL" {
+            if !command.images.is_empty() {
+                command.images[rand::thread_rng().gen_range(0..command.images.len())].clone()
+            } else {
+                return Ok(Err(anyhow!("❌ No images have been added yet.")));
+            }
+        }
+        else {
+            SillyCommandPDO::fetch_random_silly_image_by_name_and_preference(&context, command.id_silly_command, &preference).await?
+        };
+
+
+        let text = if !command.texts.is_empty() {
+            &command.texts[rand::thread_rng().gen_range(0..command.texts.len())]
+        } else {
+            ""
+        }
+        .replace("{author}", &format!("<@{}>", user.get()))
+        .replace("{user}", &format!("<@{}>", author_id.get()));
+
+        let (embed, attachment) = create_embed_image(&context, &image, &text).await?;
+
+        let image_bytes = { std::fs::read(image)? };
+
+
+        let embed = embed
+            .footer(EmbedFooter {
+                icon_url: None,
+                proxy_icon_url: None,
+                text: 
+                command.footer_text
+                    .replace("{author}", &user_name)
+                    .replace("{user}", &author_name)
+                    .replace("{count}", &format!("{}", usages.usages))
+            })
+            .build();
+
+        
+        context
+            .http_client.interaction(context.application.id)
+            .create_followup(&interaction.token)
+            .embeds(&[embed])?
+            .content(&message_content)?
+            .attachments(&[Attachment::from_bytes(attachment, image_bytes, 1)])?
+            .await?;
 
     };
 
