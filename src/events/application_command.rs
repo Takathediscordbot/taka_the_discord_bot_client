@@ -6,10 +6,13 @@ use twilight_util::builder::embed::EmbedBuilder;
 
 use crate::{
     context::Context,
-    services::silly_command::SillyCommandPDO,
     utils::timer::Timer,
 };
 
+#[cfg(feature = "database")]
+use crate::services::silly_command::SillyCommandPDO;
+
+#[cfg(feature = "database")]
 use super::silly_command::handle_silly_command;
 
 pub async fn handle_chat_command(
@@ -21,21 +24,35 @@ pub async fn handle_chat_command(
     let name = data.name.as_str();
     let command = context.commands.iter().find(|a| a.get_name() == name);
 
+
     let result = if let Some(command) = command {
         command
             .run(shard, interaction, data, &context)
             .await
-    } else if let Some(command) =
+    }
+     else {
+        #[cfg(feature = "database")]
+        if let Some(command) =
         SillyCommandPDO::fetch_silly_command_by_name(&context, name).await
-    {
-        handle_silly_command(shard, interaction, data, command, &context).await
-    } else {
+        {
+            handle_silly_command(shard, interaction, data, command, &context).await
+        }
+        else {
+            let Err(e) = context.response_to_interaction_with_content(interaction,"❌ Unhandled command: this command has not yet been implemented")
+            .await else {
+                return Ok(());
+            };
+    
+            Err(anyhow::anyhow!(e))
+        }
 
+        #[cfg(not(feature = "database"))]
         let Err(e) = context.response_to_interaction_with_content(interaction,"❌ Unhandled command: this command has not yet been implemented")
         .await else {
             return Ok(());
         };
 
+        #[cfg(not(feature = "database"))]
         Err(anyhow::anyhow!(e))
     };
 

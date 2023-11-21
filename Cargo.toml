@@ -15,7 +15,7 @@ tower-http = { version = "0.4.0", features = ["fs", "cors"] }
 axum = "0.6.18"
 dotenvy = "0.15.7"
 futures = "0.3.28"
-headless_chrome = {version="1.0.5", features=["fetch"]}
+headless_chrome = {version="1.0.5", features=["fetch"], optional = true}
 serde = "1.0.160"
 serde_json = "1.0.96"
 tetrio-api = { "path" = "../tetrio-api" }
@@ -28,16 +28,13 @@ twilight-model = "0.15.2"
 twilight-util = {version = "0.15.2", features = ["builder"] }
 common = {path = "../taka_the_discord_bot_common" }
 reqwest = "0.11.18"
-itertools = "0.10.5"
+itertools = "0.12.0"
 async-trait = "0.1.68"
-async-object-pool = "0.1.4"
-image = "0.24.6"
-sqlx = { version = "0.6.3", features = [ "runtime-tokio-native-tls", "postgres" ] }
+sqlx = { version = "0.7.2", features = [ "runtime-tokio-native-tls", "postgres" ], optional = true}
 rand = "0.8.5"
-zip = "0.6.6"
 log = "0.4.20"
-flexi_logger = "0.25.6"
-chatgpt_rs = "1.2.3"
+flexi_logger = "0.27.3"
+chatgpt_rs = {version = "1.2.3", optional = true}
 
 
 [dependencies.uuid]
@@ -47,3 +44,14 @@ features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
+
+[features]
+# default = ["database", "html_server_image_generation", "ai"]
+# default = ["database", "html_server_image_generation"]
+# default = ["database", "ai"]
+# default = ["html_server_image_generation", "ai"] 
+# default=["full"]
+database = ["sqlx"]
+html_server_image_generation = ["headless_chrome"]
+ai = ["chatgpt_rs"]
+full = ["database", "html_server_image_generation", "ai"]

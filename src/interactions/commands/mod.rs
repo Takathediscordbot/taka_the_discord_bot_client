@@ -1,41 +1,54 @@
 use crate::{
     interactions::commands::{
-        add_silly_image::AddSillyImage,
-        add_silly_text::AddSillyText,
-        create_silly_command::CreateSillyCommand,
         help::HelpCommand,
-        test_mode::TestMode,
         tetrio_commands::{
             lb::LbCommand, psq::PsqCommand,
-            rlb::RLbCommand, sq::SqCommand, teto::TetoCommand,
-            tetra_command::TetraCommand, ts::TsCommand, vs::VsCommand, vsr::VsrCommand,
+            rlb::RLbCommand, sq::SqCommand, 
+            ts::TsCommand, vs::VsCommand, vsr::VsrCommand,
             vst::VstCommand,
-        }, silly_command::SillyCommand, ping_command::PingCommand, reload_commands::ReloadCommands, rng::RngCommand, eight_ball::EightBallCommand, export_silly_commands::ExportSillyCommands, add_preference::AddPreferenceCommand, load_silly_command_images::LoadSillyCommandImages,
+        }, ping_command::PingCommand, reload_commands::ReloadCommands, rng::RngCommand, eight_ball::EightBallCommand,
     },
     utils::box_commands::{PhantomCommand, PhantomCommandTrait},
 };
 
-pub mod add_silly_image;
-pub mod add_silly_text;
-pub mod create_silly_command;
+
 pub mod help;
 pub mod models;
 pub mod options;
 pub mod subcommands;
-pub mod test_mode;
 pub mod tetrio_commands;
-pub mod silly_command;
 pub mod ping_command;
 pub mod reload_commands;
 pub mod rng;
 pub mod eight_ball;
-pub mod export_silly_commands;
-pub mod add_preference;
-pub mod load_silly_command_images;
+#[cfg(feature = "database")]
+pub mod silly_commands_utils;
 
 pub fn get_commands() -> Vec<Box<dyn PhantomCommandTrait>> {
+    #[cfg(feature = "database")] 
+    use silly_commands_utils::{
+        add_preference::AddPreferenceCommand,
+        add_silly_text::AddSillyText,
+        add_silly_image::AddSillyImage,
+        export_silly_commands::ExportSillyCommands,
+        load_silly_command_images::LoadSillyCommandImages,
+        silly_command::SillyCommand,
+        create_silly_command::CreateSillyCommand,    
+    };
+
+    #[cfg(feature = "html_server_image_generation")]
+    use crate::
+        interactions::commands::
+            tetrio_commands::{
+                teto::TetoCommand,
+                tetra_command::TetraCommand
+            }
+    ;
+
     vec![
+        #[cfg(feature = "html_server_image_generation")]
         Box::new(PhantomCommand::<TetoCommand>::new()),
+        #[cfg(feature = "html_server_image_generation")]
         Box::new(PhantomCommand::<TetraCommand>::new()),
         Box::new(PhantomCommand::<PingCommand>::new()),
         Box::new(PhantomCommand::<ReloadCommands>::new()),
@@ -47,16 +60,22 @@ pub fn get_commands() -> Vec<Box<dyn PhantomCommandTrait>> {
         Box::new(PhantomCommand::<PsqCommand>::new()),
         Box::new(PhantomCommand::<LbCommand>::new()),
         Box::new(PhantomCommand::<RLbCommand>::new()),
-        Box::new(PhantomCommand::<CreateSillyCommand>::new()),
-        Box::new(PhantomCommand::<AddSillyImage>::new()),
-        Box::new(PhantomCommand::<AddSillyText>::new()),
         Box::new(PhantomCommand::<HelpCommand>::new()),
-        Box::new(PhantomCommand::<TestMode>::new()),
-        Box::new(PhantomCommand::<SillyCommand>::new()),
         Box::new(PhantomCommand::<RngCommand>::new()),
         Box::new(PhantomCommand::<EightBallCommand>::new()),
+        #[cfg(feature = "database")]
         Box::new(PhantomCommand::<ExportSillyCommands>::new()),
+        #[cfg(feature = "database")]
         Box::new(PhantomCommand::<AddPreferenceCommand>::new()),
+        #[cfg(feature = "database")]
+        Box::new(PhantomCommand::<CreateSillyCommand>::new()),
+        #[cfg(feature = "database")]
+        Box::new(PhantomCommand::<SillyCommand>::new()),
+        #[cfg(feature = "database")]
+        Box::new(PhantomCommand::<AddSillyImage>::new()),
+        #[cfg(feature = "database")]
+        Box::new(PhantomCommand::<AddSillyText>::new()),
+        #[cfg(feature = "database")]
         Box::new(PhantomCommand::<LoadSillyCommandImages>::new()),
     ]
 }

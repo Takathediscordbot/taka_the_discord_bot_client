@@ -1,5 +1,3 @@
-
-
 use twilight_interactions::command::CreateCommand;
 use twilight_model::{gateway::payload::incoming::InteractionCreate, application::interaction::application_command::CommandData, channel::message::{Embed, embed::EmbedFooter, Component, component::{Button, ActionRow}, ReactionType}, http::interaction::{InteractionResponse, InteractionResponseType}};
 use twilight_util::builder::InteractionResponseDataBuilder;
@@ -7,7 +5,6 @@ use twilight_util::builder::InteractionResponseDataBuilder;
 
 use crate::{utils::{box_commands::RunnableCommand, 
     create_embed::create_embed}, context::Context, 
-    services::silly_command::SillyCommandPDO,
 };
 
 use super::tetrio_commands;
@@ -42,21 +39,29 @@ impl HelpCommand {
             .build();
 
 
+        #[cfg(feature = "database")] 
+        let silly_command_embed = {
+        use crate::services::silly_command::SillyCommandPDO;
         let silly_commands = SillyCommandPDO::fetch_silly_commands(&context).await;
-        let silly_command_embed = default_embed.clone();
         let mut silly_command_description = String::new();
         for command in silly_commands.into_iter() {
             silly_command_description += &format!("\n**{}**\n{}\n", &command.name, &command.description);
         }
-
-        let silly_command_embed = silly_command_embed
+        let silly_command_embed = default_embed.clone();
+        silly_command_embed
             .title("Silly commands")
             .description(silly_command_description)
             .footer(EmbedFooter { icon_url: None, proxy_icon_url: None, text: "Page 3 / 3".to_string()  })
-            .build();
+            .build()
 
+        };
 
-        Ok(vec![first_page_embed, tetrio_embed, silly_command_embed])
+            Ok(vec![
+                first_page_embed, 
+                tetrio_embed,
+                #[cfg(feature = "database")]
+                silly_command_embed
+            ])
     }
 
     fn get_buttons() -> [Component; 1] {

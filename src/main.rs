@@ -12,11 +12,13 @@ use flexi_logger::{Logger, FileSpec, WriteMode, TS_DASHES_BLANK_COLONS_DOT_BLANK
 use futures::StreamExt;
 use itertools::Itertools;
 use log::Record;
+#[cfg(feature = "database")]
 use sqlx::postgres::PgPoolOptions;
+#[allow(unused_imports)]
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tower_http::cors::CorsLayer;
+#[cfg(feature = "ai")]
 use chatgpt::prelude::{ChatGPT, ChatGPTEngine, ModelConfigurationBuilder};
-use tokio::sync::Mutex;
 use twilight_gateway::{
     error::ReceiveMessageError,
     stream::{ShardEventStream, ShardRef},
@@ -96,15 +98,18 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
         // let _tetrio_bot_username =
         //     std::env::var("TETRIO_BOT_USERNAME")?;
         println!("creating browser");
+        #[cfg(feature = "html_server_image_generation")]
         context::create_browser()
             .await?;
 
+        #[cfg(feature = "ai")]
         let openai_prompt = include_str!("./assets/prompt");
+        #[cfg(feature = "ai")]
         let openai_token =
             &std::env::var("OPENAI_TOKEN")?;        
 
  
-
+        #[cfg(feature = "ai")]
         let chatgpt = ChatGPT::new_with_config(openai_token, 
             (&mut ModelConfigurationBuilder::default())
                 .engine(ChatGPTEngine::Gpt35Turbo_0301)
@@ -112,20 +117,23 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
                 .build()?
         )?;
 
-        let sql_connection_url =
+    #[cfg(feature = "database")]
+
+    let sql_connection_url =
         &std::env::var("DATABASE_URL")?;
+    #[cfg(feature = "database")]
     let sql_connection = PgPoolOptions::new()
         .max_connections(25)
         .connect(sql_connection_url)
         .await?;
-
+    #[cfg(feature = "database")]
     let row: (i64,) = sqlx::query_as("SELECT $1")
         .bind(150_i64)
         .fetch_one(&sql_connection)
         .await?;
 
 
-
+        #[cfg(feature = "ai")]
         let ai_channel: u64 = std::env::var("AI_CHANNEL")?.parse()?;
     
 
@@ -135,17 +143,19 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
             tetrio_client,
             test_guild,
             local_server_url: std::env::var("HTML_SERVER_URL")?,
-            tetrio_token: std::env::var("TETRIO_TOKEN")?,
-            test_mode: Mutex::new(false),
+            #[cfg(feature = "database")]
             sql_connection,
             commands: get_commands(),
+            #[cfg(feature = "ai")]
             openai_prompt,
+            #[cfg(feature = "ai")]
             chatgpt_client: chatgpt,
+            #[cfg(feature = "ai")]
             ai_channel
         });
 
 
-
+    #[cfg(feature = "database")]
     log::info!("{row:?}; SQL database initialized!");
 
         println!("Hello World!");

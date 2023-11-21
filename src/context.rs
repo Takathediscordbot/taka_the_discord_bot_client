@@ -1,8 +1,11 @@
+#[allow(unused_imports)]
 use std::{time::Duration, future::IntoFuture};
+#[cfg(feature = "ai")]
 use chatgpt::prelude::ChatGPT;
+#[cfg(feature = "html_server_image_generation")]
 use headless_chrome::{Browser, LaunchOptions};
 use tetrio_api::http::cached_client::CachedClient;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use twilight_http::{Client, request::Request, routing::Route, response::marker::EmptyBody};
 use twilight_model::{guild::Guild, oauth::Application, http::interaction::{InteractionResponse, InteractionResponseType, InteractionResponseData}, gateway::payload::incoming::InteractionCreate, id::{marker::InteractionMarker, Id}};
 
@@ -14,8 +17,6 @@ struct UnauthedClient;
 
 impl UnauthedClient {
     pub async fn get() -> &'static Client  {
-
-
         return UNAUTHED_CLIENT.get_or_init(|| async {
             return Client::builder().build()
         }).await
@@ -28,13 +29,15 @@ pub struct Context {
     pub tetrio_client: CachedClient,
     pub application: Application,
     pub test_guild: Guild,
-    pub ai_channel: u64,
     pub local_server_url: String,
-    pub tetrio_token: String,
-    pub test_mode: Mutex<bool>,
-    pub sql_connection: sqlx::postgres::PgPool,
     pub commands: Vec<Box<dyn PhantomCommandTrait>>,
+    #[cfg(feature = "database")]
+    pub sql_connection: sqlx::postgres::PgPool,
+    #[cfg(feature = "ai")]
+    pub ai_channel: u64,
+    #[cfg(feature = "ai")]
     pub openai_prompt: &'static str,
+    #[cfg(feature = "ai")]
     pub chatgpt_client: ChatGPT
 }
 
@@ -118,7 +121,7 @@ impl Context {
         return self.response_to_interaction(interaction, response).await;
     }
 }
-
+#[cfg(feature = "html_server_image_generation")]
 pub async fn create_browser() -> anyhow::Result<Browser> {
     let _browser_version = if cfg!(windows) { "830237" } else { "830288" };
 
