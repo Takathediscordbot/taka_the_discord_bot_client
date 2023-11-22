@@ -31,6 +31,7 @@ pub struct Context {
     pub test_guild: Guild,
     pub local_server_url: String,
     pub commands: Vec<Box<dyn PhantomCommandTrait>>,
+    pub author_id: u64,
     #[cfg(feature = "database")]
     pub sql_connection: sqlx::postgres::PgPool,
     #[cfg(feature = "ai")]

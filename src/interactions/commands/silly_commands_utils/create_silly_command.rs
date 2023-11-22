@@ -27,7 +27,7 @@ pub enum SillyCommandTypeOption {
 #[derive(CreateCommand, CommandModel)]
 #[command(
     name = "create_silly_command",
-    desc = "Create a silly command (taka only)"
+    desc = "Create a silly command (author only)"
 )]
 pub struct CreateSillyCommand {
     /// Type of command
@@ -54,11 +54,11 @@ impl RunnableCommand for CreateSillyCommand {
         })?;
 
         let Some(author) = interaction.author_id() else {
-            return Ok(Err(anyhow!("❌ You're probably not taka")))
+            return Ok(Err(anyhow!("❌ You're probably not the author of this bot!")))
         };
 
-        if author.get() != 434626996262273038 {
-            return Ok(Err(anyhow!("❌ You're definitely not taka")));
+        if author.get() != context.author_id {
+            return Ok(Err(anyhow!("❌ You're definitely not the author of this bot!")));
         }
 
         let command_type = match model.command_type {

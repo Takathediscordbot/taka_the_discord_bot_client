@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(CreateCommand, CommandModel)]
-#[command(name = "add_silly_image", desc = "Add a silly image (taka only)")]
+#[command(name = "add_silly_image", desc = "Add a silly image (author only)")]
 pub struct AddSillyImage {
     /// The name of the command
     name: String,
@@ -39,11 +39,11 @@ impl RunnableCommand for AddSillyImage {
         })?;
 
         let Some(author) = interaction.author_id() else {
-            return Ok(Err(anyhow!("❌ You're probably not taka")));
+            return Ok(Err(anyhow!("❌ You're probably not the author of this bot!")));
         };
 
-        if author.get() != 434626996262273038 {
-            return Ok(Err(anyhow!("❌ You're definitely not taka")));
+        if author.get() != context.author_id {
+            return Ok(Err(anyhow!("❌ You're definitely not the author of this bot!")));
         }
 
         let Some(file_type) = Path::new(&model.attachment.filename)

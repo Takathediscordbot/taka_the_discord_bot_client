@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(CreateCommand, CommandModel)]
-#[command(name = "export_silly_commands", desc = "Get all silly commands (taka only)")]
+#[command(name = "export_silly_commands", desc = "Get all silly commands (author only)")]
 pub struct ExportSillyCommands {
 
 }
@@ -30,11 +30,11 @@ impl RunnableCommand for ExportSillyCommands {
         let interaction_client = context.http_client.interaction(context.application.id);
       
         let Some(author) = interaction.author_id() else {
-            return Ok(Err(anyhow::anyhow!("❌ You're probably not taka")))
+            return Ok(Err(anyhow::anyhow!("❌ You're probably not the author of this bot!")))
         };
 
-        if author.get() != 434626996262273038 {
-            return Ok(Err(anyhow::anyhow!("❌ You're definitely not taka")));
+        if author.get() != context.author_id {
+            return Ok(Err(anyhow::anyhow!("❌ You're definitely not the author of this bot!")));
         }
 
 

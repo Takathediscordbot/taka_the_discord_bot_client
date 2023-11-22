@@ -146,6 +146,7 @@ async fn run_bot() -> anyhow::Result<anyhow::Result<()>> {
             #[cfg(feature = "database")]
             sql_connection,
             commands: get_commands(),
+            author_id: std::env::var("AUTHOR_ID")?.parse()?,
             #[cfg(feature = "ai")]
             openai_prompt,
             #[cfg(feature = "ai")]
