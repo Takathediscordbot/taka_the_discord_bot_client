@@ -58,7 +58,7 @@ impl RunnableCommand for RLbCommand {
 
         let leaderboard = context
             .tetrio_client
-            .fetch_full_league_leaderboard(model.country_code)
+            .fetch_full_league_leaderboard(model.country_code.as_deref())
             .await?;
 
         let Some(data) = &leaderboard.data else {

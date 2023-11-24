@@ -14,7 +14,7 @@ pub async fn average_of_rank(
 ) -> anyhow::Result<anyhow::Result<(PlayerStatsUnwrapped, usize, f64)>> {
     let packet = context
         .tetrio_client
-        .fetch_full_league_leaderboard(country)
+        .fetch_full_league_leaderboard(country.as_deref())
         .await?;
 
     let  Some(data) = &packet.data else {
