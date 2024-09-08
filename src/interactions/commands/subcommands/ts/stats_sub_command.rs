@@ -10,6 +10,7 @@ pub struct StatsSubCommand {
     /// vs score
     pub vs: f64,
     /// rd, defaults to 60
+    #[allow(unused)]
     pub rd: Option<f64>,
     /// Show details
     pub show_details: Option<bool>,

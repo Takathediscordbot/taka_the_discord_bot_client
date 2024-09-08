@@ -24,7 +24,7 @@ pub fn set_image_if_exists(embed: EmbedBuilder, avatar: Option<ImageSource>) -> 
 
 pub async fn create_embed(
     color: Option<u32>,
-    context: &Context,
+    context: &Context<'_>,
 ) -> anyhow::Result<EmbedBuilder> {
     let bot_user = context.http_client.current_user().await?.model().await?;
 

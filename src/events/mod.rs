@@ -12,7 +12,7 @@ pub mod interactions_create;
 #[cfg(feature = "database")]
 pub mod silly_command;
 
-pub async fn handle_event(shard: u64, event: Event, context: Arc<Context>) -> anyhow::Result<()> {
+pub async fn handle_event(shard: u64, event: Event, context: Arc<Context<'_>>) -> anyhow::Result<()> {
     log::debug!("{:?} happened on shard {}", event.kind(), shard);
     match event {
         Event::InteractionCreate(it) => handle_interaction_create(shard, it, &context).await,

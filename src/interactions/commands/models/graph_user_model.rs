@@ -1,7 +1,7 @@
 
 
 use anyhow::anyhow;
-use tetrio_api::models::users::user_rank::UserRank;
+use tetrio_api::{http::parameters::personal_user_records::{PersonalLeaderboard, PersonalRecordsQuery}, models::users::user_rank::UserRank};
 use twilight_interactions::command::{CommandModel, CreateCommand, ResolvedUser};
 
 use crate::{
@@ -93,11 +93,11 @@ struct User {
 impl GraphUser {
     async fn from_discord_user(
         discord_data: &CommandBox<DiscordUserSubCommand>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         let user = context
             .tetrio_client
-            .search_user(&discord_data.user.resolved.id.get().to_string())
+            .search_discord_user(&discord_data.user.resolved.id.get().to_string())
             .await?;
 
         let Some(data) = &user.data else {
@@ -118,7 +118,7 @@ impl GraphUser {
 
     async fn from_tetrio_user(
         request_data: &TetrioUserSubCommand,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         Self::from_user(
             User {
@@ -139,18 +139,22 @@ impl GraphUser {
             tetra_league_round,
         }: User,
         dark_mode: bool,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         let tetrio_user = context.tetrio_client.fetch_user_info(&username).await?;
-
         let Some(data) = &tetrio_user.data else {
             return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
         };
 
-        let (id, _username, Some(mut apm), Some(mut pps), Some(mut vs), rank, tr, Some(glicko), Some(rd)) = (&data.user.id, &data.user.username, data.user.league.apm, data.user.league.pps, data.user.league.vs, &data.user.league.rank, data.user.league.rating, data.user.league.glicko, data.user.league.rd) else {
-            return Ok(Err(anyhow::anyhow!("❌ No tetra league stats have been found.")));
+        let tetrio_league_summary = context.tetrio_client.fetch_user_league_summaries(&username).await?;
+
+        let Some(league_data) = &tetrio_league_summary.data else {
+            return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
         };
 
+        let (id, _username, Some(mut apm), Some(mut pps), Some(mut vs), rank, tr, Some(glicko), Some(rd)) = (&data.id, &data.username, league_data.apm, league_data.pps, league_data.vs, &league_data.rank, league_data.tr, league_data.glicko, league_data.rd) else {
+            return Ok(Err(anyhow::anyhow!("❌ No tetra league stats have been found.")));
+        };
         let mut replay_url = None;
         let mut round = None;
 
@@ -159,43 +163,48 @@ impl GraphUser {
                 tetra_league_game = 1;
             }
 
-            let game = tetrio_api::http::client::fetch_tetra_league_recent(id).await?;
+            let game = context.tetrio_client.fetch_user_personal_league_records(id, PersonalLeaderboard::Recent, PersonalRecordsQuery::None).await?;
             let Some(data) = game.data else {
                 return Ok(Err(anyhow::anyhow!("❌ Couldn't find tetra league game")));
             };
-            let records = data.records.get((tetra_league_game - 1) as usize);
+            let records = data.entries.get((tetra_league_game - 1) as usize);
             let Some(records) = &records else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
 
-            let Some(left) = records.endcontext.iter().find(|a| {
-                &a.get_id().unwrap_or("".into()) == id
-            }) else {
-                return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
-            };
-
-            replay_url = Some(format!("https://tetr.io/#r:{}", records.replay_id));
+            replay_url = Some(format!("https://tetr.io/#r:{}", records.replayid));
 
             if let Some(mut tetra_league_round) = tetra_league_round {
                 if tetra_league_round <= 0 {
                     tetra_league_round = 1;
                 }
 
-                round = Some(tetra_league_round);
+                let Some(rounds) = records.results.rounds.get((tetra_league_round - 1) as usize) else {
+                    return Err(anyhow::anyhow!("❌ Invalid round!"));
+                };
 
-                let index = (tetra_league_round - 1) as usize;
-                pps = left.points.tertiary_avg_tracking[index];
-                apm = left.points.secondary_avg_tracking[index];
-                vs = left.points.extra_avg_tracking.aggregate_stats_vs_score[index];
+                let Some(round_stats) = rounds.iter().find(|user| &user.id == id) else {
+                    return Err(anyhow::anyhow!("❌ Couldn't find stats!"));
+                };
+
+                pps = round_stats.stats.pps;
+                apm = round_stats.stats.apm;
+                vs  = round_stats.stats.vsscore;
+                round = Some(tetra_league_round);
             } else {
-                pps = left.points.tertiary;
-                apm = left.points.secondary;
-                vs = left.points.extra.vs;
+                let Some(left) = records.results.leaderboard.iter().find(|user| &user.id == id) else {
+                    return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
+                };
+                pps = left.stats.pps.unwrap_or(0.0);
+                apm = left.stats.apm.unwrap_or(0.0);
+                vs  = left.stats.vsscore.unwrap_or(0.0);
+
+
             }
         }
 
         Ok(Ok(GraphUserData {
-            name: data.user.username.to_string(),
+            name: data.username.to_string(),
             replay_url,
             round,
             stats: PlayerStats {
@@ -203,9 +212,9 @@ impl GraphUser {
                 pps,
                 vs,
                 rd: Some(rd),
-                tr: Some(tr),
+                tr,
                 glicko: Some(glicko),
-                rank: Some(rank.clone()),
+                rank: rank.clone(),
             },
             dark_mode,
         }))
@@ -213,7 +222,7 @@ impl GraphUser {
 
     async fn from_stats(
         data: &StatsSubCommand,
-        _context: &Context,
+        _context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         Ok(Ok(GraphUserData {
             name: format!("{},{},{}", data.pps, data.apm, data.vs),
@@ -234,7 +243,7 @@ impl GraphUser {
 
     async fn from_average(
         average: &AverageSubCommand,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         let country_str = average
             .country
@@ -251,7 +260,6 @@ impl GraphUser {
             .unwrap_or("".to_string());
         let stats = average_of_rank(
             average.rank.clone().map(|rank| rank.into()),
-            average.country.clone().map(|c| c.to_uppercase()),
             &context,
         )
         .await?;
@@ -275,7 +283,7 @@ impl GraphUser {
 
     pub async fn get_data(
         &self,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<GraphUserData>> {
         match self {
             GraphUser::Discord(discord) => Self::from_discord_user(discord, context).await,

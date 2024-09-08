@@ -1,7 +1,11 @@
+#![cfg(feature = "tetrio")]
+
+
 use std::f64::consts::{self, PI};
 
 use tetrio_api::models::users::user_rank::UserRank;
 
+#[cfg(feature = "tetrio")]
 pub struct Stats {
     pub apm: f64,
     pub vs: f64,

@@ -7,6 +7,7 @@ use crate::{utils::{box_commands::RunnableCommand,
     create_embed::create_embed}, context::Context, 
 };
 
+#[cfg(feature = "tetrio")]
 use super::tetrio_commands;
 
 
@@ -17,7 +18,7 @@ use super::tetrio_commands;
 pub struct HelpCommand;
 
 impl HelpCommand {
-    async fn get_command_descriptions_embed(context: &Context) -> anyhow::Result<Vec<Embed>> {
+    async fn get_command_descriptions_embed(context: &Context<'_>) -> anyhow::Result<Vec<Embed>> {
         let default_embed = create_embed(None, &context).await?;
         let first_page_embed = default_embed.clone()
             
@@ -27,16 +28,22 @@ impl HelpCommand {
             .footer(EmbedFooter { icon_url: None, proxy_icon_url: None, text: "Page 1 / 3".to_string()  })
             .build();
         
+        #[cfg(feature = "tetrio")] 
+        let tetrio_embed = {
+
         let mut tetrio_commands_description = String::new();
         for (name,desc) in tetrio_commands::get_descriptions().iter() {
             tetrio_commands_description += &format!("\n**{name}**\n{desc}\n");
         }
         let tetrio_embed = default_embed.clone();
-        let tetrio_embed = tetrio_embed
+        tetrio_embed
             .title("Tetrio commands")
             .description(tetrio_commands_description)
             .footer(EmbedFooter { icon_url: None, proxy_icon_url: None, text: "Page 2 / 3".to_string()  })
-            .build();
+            .build()
+
+        };
+
 
 
         #[cfg(feature = "database")] 
@@ -57,7 +64,8 @@ impl HelpCommand {
         };
 
             Ok(vec![
-                first_page_embed, 
+                first_page_embed,
+                #[cfg(feature = "tetrio")] 
                 tetrio_embed,
                 #[cfg(feature = "database")]
                 silly_command_embed
@@ -84,7 +92,7 @@ impl HelpCommand {
         
     }
 
-    pub async fn previous(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: &Context) -> anyhow::Result<()> {
+    pub async fn previous(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: &Context<'_>) -> anyhow::Result<()> {
         let Some(message) = &it.message else {
             return Ok(())
        };
@@ -126,7 +134,7 @@ impl HelpCommand {
         Ok(())
     }
 
-    pub async fn next(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: &Context) -> anyhow::Result<()> {
+    pub async fn next(_shard: u64, it: Box<InteractionCreate>, _data: twilight_model::application::interaction::message_component::MessageComponentInteractionData, context: &Context<'_>) -> anyhow::Result<()> {
        
        let Some(message) = &it.message else {
             return Ok(())
@@ -171,7 +179,7 @@ impl RunnableCommand for HelpCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>>{
         let embeds = Self::get_command_descriptions_embed(&context).await?;
         let buttons = Self::get_buttons();

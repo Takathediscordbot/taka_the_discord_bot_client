@@ -65,7 +65,7 @@ impl RunnableCommand for LoadSillyCommandImages {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         context.defer_response(interaction).await?;
         let interaction_client = context.http_client.interaction(context.application.id);

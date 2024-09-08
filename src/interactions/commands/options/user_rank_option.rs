@@ -3,6 +3,8 @@ use twilight_interactions::command::{CommandOption, CreateOption};
 
 #[derive(CreateOption, CommandOption, Clone, Debug)]
 pub enum UserRankOption {
+    #[option(name = "X+", value = "X+")]
+    XPlus,
     #[option(name = "X", value = "X")]
     X,
     #[option(name = "U", value = "U")]
@@ -42,6 +44,7 @@ pub enum UserRankOption {
 impl From<UserRankOption> for UserRank {
     fn from(val: UserRankOption) -> Self {
         match val {
+            UserRankOption::XPlus => UserRank::XPlus,
             UserRankOption::X => UserRank::X,
             UserRankOption::U => UserRank::U,
             UserRankOption::SS => UserRank::SS,

@@ -18,7 +18,7 @@ impl RunnableCommand for PingCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let interaction_client = context.http_client.interaction(context.application.id);
 

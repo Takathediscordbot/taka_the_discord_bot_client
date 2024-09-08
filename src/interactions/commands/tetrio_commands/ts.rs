@@ -2,6 +2,9 @@ use std::borrow::Cow;
 
 
 use anyhow::anyhow;
+use common::Average;
+use common::replay::ttrm::models::events::Event;
+use tetrio_api::http::parameters::personal_user_records::{PersonalLeaderboard, PersonalRecordsQuery};
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
 
 use twilight_model::application::interaction::application_command::CommandData;
@@ -13,6 +16,7 @@ use twilight_util::builder::embed::{EmbedBuilder, ImageSource};
 
 use crate::context::Context;
 
+use crate::interactions::commands::subcommands::ts::ttrm_replay_sub_command::TetrioReplaySubCommand;
 use crate::utils::average_of_rank::average_of_rank;
 use crate::utils::box_commands::{CommandBox, RunnableCommand};
 use crate::utils::create_embed::create_embed;
@@ -34,9 +38,13 @@ pub enum TsCommand {
     #[command(name = "tetrio")]
     /// Fetch data from a tetrio user
     Tetrio(TetrioUserSubCommand),
-    #[command(name = "stats")]
     /// Use tetrio stats
+    #[command(name = "stats")]
     Stats(StatsSubCommand),
+
+    /// Use tetrio replay
+    #[command(name = "replay")]
+    Replay(TetrioReplaySubCommand),
 
     #[command(name = "average")]
     /// Use average stats
@@ -50,7 +58,7 @@ impl TsCommand {
         show_details: bool,
         tetra_league_game: Option<i64>,
         tetra_league_round: Option<i64>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
 
         let tetrio_user = context.tetrio_client.fetch_user_info(&id).await?;
@@ -59,7 +67,13 @@ impl TsCommand {
             return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
         };
 
-        let (id, username, Some(mut apm), Some(mut pps), Some(mut vs), rank, tr, Some(glicko), Some(rd)) = (&data.user.id, &data.user.username, data.user.league.apm, data.user.league.pps, data.user.league.vs, &data.user.league.rank, data.user.league.rating, data.user.league.glicko, data.user.league.rd) else {
+        let tetrio_league_summary = context.tetrio_client.fetch_user_league_summaries(&id).await?;
+
+        let Some(league_data) = &tetrio_league_summary.data else {
+            return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
+        };
+
+        let (id, username, Some(mut apm), Some(mut pps), Some(mut vs), rank, tr, Some(glicko), Some(rd)) = (&data.id, &data.username, league_data.apm, league_data.pps, league_data.vs, &league_data.rank, league_data.tr, league_data.glicko, league_data.rd) else {
             return Ok(Err(anyhow::anyhow!("❌ No tetra league stats have been found.")));
         };
 
@@ -68,50 +82,56 @@ impl TsCommand {
                 tetra_league_game = 1;
             }
 
-            let game = tetrio_api::http::client::fetch_tetra_league_recent(id).await?;
+            let game = context.tetrio_client.fetch_user_personal_league_records(id, PersonalLeaderboard::Recent, PersonalRecordsQuery::None).await?;
             let Some(data) = game.data else {
                 return Ok(Err(anyhow::anyhow!("❌ Couldn't find tetra league game")));
             };
-            let records = data.records.get((tetra_league_game - 1) as usize);
+            let records = data.entries.get((tetra_league_game - 1) as usize);
             let Some(records) = &records else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
 
-            let Some(left) = records.endcontext.iter().find(|a| {
-                &a.get_id().unwrap_or("".into()) == id
-            }) else {
-                return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
-            };
+
 
             if let Some(mut tetra_league_round) = tetra_league_round {
                 if tetra_league_round <= 0 {
                     tetra_league_round = 1;
                 }
 
-                let index = (tetra_league_round - 1) as usize;
-                pps = left.points.tertiary_avg_tracking[index];
-                apm = left.points.secondary_avg_tracking[index];
-                vs = left.points.extra_avg_tracking.aggregate_stats_vs_score[index];
+                let Some(round) = records.results.rounds.get((tetra_league_round - 1) as usize) else {
+                    return Err(anyhow::anyhow!("❌ Invalid round!"));
+                };
+
+                let Some(round) = round.iter().find(|user| &user.id == id) else {
+                    return Err(anyhow::anyhow!("❌ Couldn't find stats!"));
+                };
+
+                pps = round.stats.pps;
+                apm = round.stats.apm;
+                vs  = round.stats.vsscore;
 
                 format!(
                     "[Tetra league game](https://tetr.io/#r:{})\nStats from round {}.",
-                    records.replay_id, tetra_league_round
+                    records.replayid, tetra_league_round
                 )
             } else {
-                pps = left.points.tertiary;
-                apm = left.points.secondary;
-                vs = left.points.extra.vs;
+                let Some(left) = records.results.leaderboard.iter().find(|user| &user.id == id) else {
+                    return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
+                };
+                pps = left.stats.pps.unwrap_or(0.0);
+                apm = left.stats.apm.unwrap_or(0.0);
+                vs  = left.stats.vsscore.unwrap_or(0.0);
 
                 format!(
                     "[Tetra league game](https://tetr.io/#R:{})\nStats from Average.",
-                    records.replay_id
+                    records.replayid
                 )
             }
         } else {
             String::new()
         };
 
-        let avatar_revision = data.user.avatar_revision.unwrap_or(0);
+        let avatar_revision = data.avatar_revision.unwrap_or(0);
         let builder = create_embed(None, &context).await?
             .title(username.to_uppercase())
             .url(format!("https://ch.tetr.io/u/{username}"))
@@ -135,9 +155,9 @@ impl TsCommand {
                 pps,
                 vs,
                 rd: Some(rd),
-                tr: Some(tr),
+                tr,
                 glicko: Some(glicko),
-                rank: Some(rank.clone()),
+                rank: rank.clone(),
             },
             None,
             None,
@@ -170,10 +190,132 @@ impl TsCommand {
         Ok(Ok(()))
     }
 
+    pub async fn with_replay(
+        replay: TetrioReplaySubCommand,
+        interaction: &InteractionCreate,
+        context: &Context<'_>,
+    ) -> anyhow::Result<anyhow::Result<()>> {
+        let attachment = &replay.replay;
+        // check that extension is ttrm
+        if !attachment.filename.ends_with("ttrm") {
+            return Ok(Err(anyhow!("❌ File type not supported: {:?}", attachment.filename)));
+        };
+
+        let bytes = reqwest::get(&attachment.url)
+            .await?
+            .bytes()
+            .await?;
+
+        let replay_data:common::replay::ttrm::models::Root = serde_json::from_slice(&bytes)
+        .map_err(|err| anyhow!("❌ Couldn't parse ttrm replay: {:?}", err))?;
+
+
+        let username = replay.user.clone();
+        let Some(_) = replay_data.endcontext.iter().find(move |endcontext| {
+            endcontext.get_username() == Some(username.clone())
+        }) else {
+            return Ok(Err(anyhow!("❌ Couldn't find user in replay")));
+        };
+
+        let username = replay.user.clone();
+        let mut end_frames = replay_data.data.into_iter().map(|round| {
+            let username = username.clone();
+            round.replays.into_iter().filter_map(move |replayd| replayd.events.into_iter().find(|event|{
+                match event {
+                    Event::End { data, .. } => data.export.options.username == username,
+                    _ => false
+                }
+            }).and_then(|obj| {
+                match obj {
+                    Event::End { data, .. } => Some(data),
+                    _ => None
+                }
+            }))
+        }).flatten()
+        ;        
+
+
+
+        let Some((stats, tetra_league_game_str)) = ({
+            if let Some(game_number) = replay.game_number {
+            end_frames.nth(game_number as usize).and_then(|data| {
+
+            Some((Average {
+                username: replay.user.clone(),
+                apm: data.export.aggregatestats.apm,
+                pps: data.export.aggregatestats.pps,
+                vs: data.export.aggregatestats.vsscore,
+                score: 0
+            }, format!("Stats from round {}.", game_number)))
+        })
+
+        } else {
+            // get average
+            Some((end_frames.fold(Average{
+                username: replay.user.clone(),
+                apm: 0.0,
+                pps: 0.0,
+                vs: 0.0,
+                score: 0
+            }, |acc,  event| {
+                    let apm = event.export.aggregatestats.apm;
+                    let pps = event.export.aggregatestats.pps;
+                    let vs = event.export.aggregatestats.vsscore;
+                    Average {
+                        username: replay.user.clone(),
+                        apm: acc.apm + apm,
+                        pps: acc.pps + pps,
+                        vs: acc.vs + vs,
+                        score: 0
+                    }
+                }
+            ), "Stats from Average.".to_string()))
+        }
+        }) else {
+            return Ok(Err(anyhow!("❌ Couldn't find user in replay")));
+        };
+
+
+
+
+        let builder = create_embed(None, &context).await?
+        .title(replay.user.to_uppercase())
+        .url(format!("https://ch.tetr.io/u/{}", replay.user))
+        .description(format!("Takathebot - A bot attempting to copy sheetBot and but hiyajo maho but somehow does things in a better yet worse way.\n{}", tetra_league_game_str))
+        ;
+            
+        let embed = Self::embed_with_stats(
+            builder,
+            replay.show_details.unwrap_or(false),
+            PlayerStats {
+                apm: stats.apm,
+                pps: stats.pps,
+                vs: stats.vs,
+                rd: None,
+                tr: None,
+                glicko: None,
+                rank: None,
+            },
+            None,
+            None,
+        )
+        .await
+        .build();
+
+        context
+            .http_client
+            .interaction(context.application.id)
+            .update_response(&interaction.token)
+            .embeds(Some(&[embed]))?
+            .await?;
+
+        Ok(Ok(()))
+    }
+
     pub async fn with_stats(
         stats: StatsSubCommand,
         interaction: &InteractionCreate,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let builder = create_embed(None, &context).await?
             .title(format!("ADVANCED STATS FOR VALUES OF [APM = {}, PPS = {}, VS = {}]", stats.apm, stats.pps, stats.vs))
@@ -211,16 +353,11 @@ impl TsCommand {
     pub async fn with_average_stats(
         average: AverageSubCommand,
         interaction: &InteractionCreate,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
-        let country_str = average
-            .country
-            .clone()
-            .map(|a| format!("IN COUNTRY {}", a))
-            .unwrap_or(String::new());
+
         let stats = average_of_rank(
             average.rank.clone().map(|rank| rank.into()),
-            average.country.map(|c| c.to_uppercase()),
             &context,
         )
         .await?;
@@ -239,7 +376,7 @@ impl TsCommand {
             .unwrap_or("ALL");
 
         let builder = create_embed(None, &context).await?
-            .title(format!("AVERAGE STATS OF RANK {} {country_str}", rank))
+            .title(format!("AVERAGE STATS OF RANK {}", rank))
             .description("Takathebot - A bot attempting to copy sheetBot and but hiyajo maho but somehow does things in a better yet worse way.")
             ;
 
@@ -550,7 +687,7 @@ impl RunnableCommand for TsCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("ts command");
         let _command_timer = Timer::new("ts command");
@@ -564,22 +701,22 @@ impl RunnableCommand for TsCommand {
             TsCommand::Discord(discord) => {
                 let packet = context
                     .tetrio_client
-                    .search_user(&discord.user.resolved.id.to_string())
+                    .search_discord_user(&discord.user.resolved.id.to_string())
                     .await?;
 
-                let Some(data) = &packet.data else {
+                if let Some(data) = &packet.data {
+                    Self::with_user(
+                        data.user.id.to_string(),
+                        interaction,
+                        discord.details.unwrap_or(false),
+                        discord.tetra_league_game,
+                        discord.tetra_league_round,
+                        &context,
+                    )
+                    .await
+                } else {
                     return Ok(Err(anyhow!("❌ Couldn't find your tetrio id from the discord account, they might have not linked it publicly to their tetrio profile")));
-                };
-
-                Self::with_user(
-                    data.user.id.to_string(),
-                    interaction,
-                    discord.details.unwrap_or(false),
-                    discord.tetra_league_game,
-                    discord.tetra_league_round,
-                    &context,
-                )
-                .await
+                }
             }
             TsCommand::Tetrio(tetrio) => {
                 Self::with_user(
@@ -597,6 +734,9 @@ impl RunnableCommand for TsCommand {
             }
             TsCommand::Average(average) => {
                 Self::with_average_stats(average, interaction, &context).await
+            }
+            TsCommand::Replay(replay) => {
+                Self::with_replay(replay, interaction, &context).await
             }
         }
     }

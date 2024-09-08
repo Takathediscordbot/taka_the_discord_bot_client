@@ -1,8 +1,8 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use anyhow::anyhow;
 use itertools::Itertools;
-use tetrio_api::models::users::lists::league_full::LeagueFullPacketData;
+use tetrio_api::models::{common::APIstring, users::user_leaderboard::LeaderboardUser};
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
 use twilight_model::{
     application::interaction::application_command::CommandData,
@@ -46,35 +46,36 @@ pub struct LbCommand {
 
 impl LbCommand {
     pub fn filter_rank<'a>(
-        data: &'a LeagueFullPacketData,
+        data: &'a Vec<LeaderboardUser>,
         rank: &'a Option<UserRankOption>,
     ) -> std::iter::FilterMap<
         std::iter::Enumerate<
-            std::slice::Iter<'a, tetrio_api::models::users::lists::league_full::LeagueFullUser>,
+            std::slice::Iter<'a, tetrio_api::models::users::user_leaderboard::LeaderboardUser>,
         >,
         impl FnMut(
             (
                 usize,
-                &'a tetrio_api::models::users::lists::league_full::LeagueFullUser,
+                &'a tetrio_api::models::users::user_leaderboard::LeaderboardUser,
             ),
         ) -> Option<(
             usize,
-            &'a tetrio_api::models::users::lists::league_full::LeagueFullUser,
+            &'a tetrio_api::models::users::user_leaderboard::LeaderboardUser,
         )>,
     > {
         let rank = rank.clone().map(|f| f.into());
-        data.users
+        return data
             .iter()
             .enumerate()
-            .filter_map(move |(pos, user)| match &rank {
-                Some(rank) => {
-                    if &user.league.rank == rank {
+            .filter_map(move |(pos, user)| match (&rank, &user.league.rank) {
+                (Some(rank), Some(user_rank)) => {
+                    if user_rank == rank {
                         Some((pos, user))
                     } else {
                         None
                     }
-                }
-                None => Some((pos, user)),
+                },
+                (Some(_), None) => None,
+                (None, _) => Some((pos, user)),
             })
     }
 
@@ -83,29 +84,29 @@ impl LbCommand {
         iter: impl Iterator<
             Item = (
                 usize,
-                &'a tetrio_api::models::users::lists::league_full::LeagueFullUser,
+                &'a tetrio_api::models::users::user_leaderboard::LeaderboardUser,
             ),
         >,
-    ) -> Vec<(usize, Arc<str>, f64)> {
+    ) -> Vec<(usize, APIstring, f64)> {
         match leaderboart_stat {
             UserStatOption::APM => iter
                 .filter_map(|(rank, user)| {
-                    user.league
-                        .apm
+                    Some(user.league
+                        .apm)
                         .map(|stat| (rank, user.username.clone(), stat))
                 })
                 .collect(),
             UserStatOption::PPS => iter
                 .filter_map(|(rank, user)| {
-                    user.league
-                        .pps
+                    Some(user.league
+                        .pps)
                         .map(|stat| (rank, user.username.clone(), stat))
                 })
                 .collect(),
             UserStatOption::VS => iter
                 .filter_map(|(rank, user)| {
-                    user.league
-                        .vs
+                    Some(user.league
+                        .vs)
                         .map(|stat| (rank, user.username.clone(), stat))
                 })
                 .collect(),
@@ -125,21 +126,21 @@ impl LbCommand {
                 .map(|(rank, user)| (rank, user.username.clone(), user.league.gamesplayed as f64))
                 .collect(),
             UserStatOption::TR => iter
-                .map(|(rank, user)| (rank, user.username.clone(), user.league.rating))
+                .map(|(rank, user)| (rank, user.username.clone(), user.league.tr))
                 .collect(),
             e => iter
                 .filter_map(|(rank, user)| {
-                    if let (Some(pps), Some(apm), Some(vs)) =
-                        (user.league.pps, user.league.apm, user.league.vs)
+                    let (pps, apm, vs) =
+                        (user.league.pps, user.league.apm, user.league.vs);
                     {
                         let stats = calculate_stats(PlayerStats {
                             apm,
                             pps,
                             vs,
-                            rd: user.league.rd,
-                            tr: Some(user.league.rating),
-                            glicko: user.league.glicko,
-                            rank: Some(user.league.rank.clone()),
+                            rd: Some(user.league.rd),
+                            tr: Some(user.league.tr),
+                            glicko: Some(user.league.glicko),
+                            rank: user.league.rank.clone(),
                         });
                         match e {
                             UserStatOption::APP => Some((rank, user.username.clone(), stats.app)),
@@ -185,9 +186,7 @@ impl LbCommand {
                             }
                             _ => None,
                         }
-                    } else {
-                        None
-                    }
+                    } 
                 })
                 .collect(),
         }
@@ -200,11 +199,11 @@ impl RunnableCommand for LbCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("lb command");
         let _command_timer = Timer::new("lb command");
-        let thread = Context::threaded_defer_response(&context, interaction);
+        Context::defer_response(&context, interaction).await?;
         
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
@@ -212,12 +211,11 @@ impl RunnableCommand for LbCommand {
         })?;
 
         let leaderboard = context
-            .tetrio_client
-            .fetch_full_league_leaderboard(model.country_code.as_deref())
+            .fetch_full_leaderboard(model.country_code.as_deref())
             .await?;
 
         let Some(data) = &leaderboard.data else {
-            return Ok(Err(anyhow!("❌ Couldn't fetch leaderboard data because {}", leaderboard.error.clone().unwrap_or("Unknwon error".to_string()))));
+            return Ok(Err(anyhow!("❌ Couldn't fetch leaderboard data!")));
         };
 
         let iter = Self::filter_rank(data, &model.rank);
@@ -248,7 +246,6 @@ impl RunnableCommand for LbCommand {
 
         let content = format!("```\n{content}\n```");
 
-        thread.await??;
 
         let interaction_client = context.http_client.interaction(context.application.id);
         let r = interaction_client

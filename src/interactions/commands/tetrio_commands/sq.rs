@@ -121,11 +121,11 @@ impl RunnableCommand for SqCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("sq command");
         let _command_timer = Timer::new("sq command");
-        let thread = Context::threaded_defer_response(&context, interaction);
+        Context::defer_response(&context, interaction).await?;
 
         let model = GraphUser::from_interaction(CommandInputData {
             options: data.options,
@@ -155,7 +155,6 @@ impl RunnableCommand for SqCommand {
 
         let content = format!("{replay_str}\n{url}");
 
-        thread.await??;
 
         context
             .http_client

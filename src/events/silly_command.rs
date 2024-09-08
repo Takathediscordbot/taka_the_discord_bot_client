@@ -22,7 +22,7 @@ async fn handle_author_silly_command(
     interaction: &InteractionCreate,
     _data: Box<CommandData>,
     command: crate::models::silly_command::SillyCommandData,
-    context: &Context,
+    context: &Context<'_>,
 ) -> Result<Result<(), anyhow::Error>, anyhow::Error> {
     let Some(author_id) = interaction.author_id() else {
         return Ok(Err(anyhow!("❌ Couldn't find command author.")));
@@ -67,7 +67,7 @@ async fn handle_single_user_silly_command(
     interaction: &InteractionCreate,
     data: Box<CommandData>,
     command: crate::models::silly_command::SillyCommandData,
-    context: &Context,
+    context: &Context<'_>,
 ) -> std::result::Result<std::result::Result<(), anyhow::Error>, anyhow::Error> {
     let Some(a) = data.options.iter().find(|a| &a.name == "user") else {
         return Ok(Err(anyhow!("❌ Command has to be reloaded, tell taka.")));
@@ -304,7 +304,7 @@ async fn handle_single_user_silly_command(
 }
 
 async fn create_embed_image(
-    context: &Context,
+    context: &Context<'_>,
     image: &str,
     text: &str,
 ) -> anyhow::Result<(EmbedBuilder, String)> {
@@ -324,7 +324,7 @@ pub async fn handle_silly_command(
     interaction: &InteractionCreate,
     data: Box<CommandData>,
     command: crate::models::silly_command::SillyCommandData,
-    context: &Context,
+    context: &Context<'_>,
 ) -> Result<Result<(), anyhow::Error>, anyhow::Error> {
     match command.command_type {
         crate::models::silly_command::SillyCommandType::AuthorOnly => {

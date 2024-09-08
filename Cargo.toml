@@ -11,29 +11,30 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.71"
-tower-http = { version = "0.4.0", features = ["fs", "cors"] }
-axum = "0.6.18"
+tower-http = { version = "0.5.2", features = ["fs", "cors"] }
+axum = "0.7.5"
 dotenvy = "0.15.7"
 futures = "0.3.28"
-headless_chrome = {version="1.0.5", features=["fetch"], optional = true}
+
 serde = "1.0.160"
 serde_json = "1.0.96"
-tetrio-api = { "path" = "../tetrio-api" }
+tetrio-api = { "path" = "../tetrio-api", optional = true}
 tokio = {version = "1.28.0", features = ["full"]}
-twilight = "0.15.0"
 twilight-gateway = "0.15.2"
 twilight-http = "0.15.2"
 twilight-interactions = "0.15.1"
 twilight-model = "0.15.2"
 twilight-util = {version = "0.15.2", features = ["builder"] }
 common = {path = "../taka_the_discord_bot_common" }
-reqwest = "0.11.18"
-itertools = "0.12.0"
+reqwest = "0.12.7"
+itertools = "0.13.0"
 async-trait = "0.1.68"
-sqlx = { version = "0.7.2", features = [ "runtime-tokio-native-tls", "postgres" ], optional = true}
+sqlx = { version = "0.8.2", features = [ "runtime-tokio-native-tls", "postgres" ], optional = true}
 rand = "0.8.5"
 log = "0.4.20"
-flexi_logger = "0.27.3"
+flexi_logger = "0.29"
+mime = "0.3.17"
+redis = "0.26.1"
 chatgpt_rs = {version = "1.2.3", optional = true}
 
 
@@ -48,10 +49,11 @@ features = [
 [features]
 # default = ["database", "html_server_image_generation", "ai"]
 # default = ["database", "html_server_image_generation"]
-# default = ["database", "ai"]
 # default = ["html_server_image_generation", "ai"] 
 # default=["full"]
 database = ["sqlx"]
-html_server_image_generation = ["headless_chrome"]
+tetrio = ["tetrio-api"]
+html_server_image_generation = []
 ai = ["chatgpt_rs"]
-full = ["database", "html_server_image_generation", "ai"]
+full = ["database", "html_server_image_generation", "ai", "tetrio"]
+default = ["full"]

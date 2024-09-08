@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use itertools::Itertools;
 use serde_json::json;
-use tetrio_api::models::users::user_rank::UserRank;
+use tetrio_api::{http::parameters::personal_user_records::{PersonalLeaderboard, PersonalRecordsQuery}, models::users::user_rank::UserRank};
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand};
 use twilight_model::{
     application::interaction::application_command::CommandData,
@@ -55,7 +55,7 @@ impl VsCommand {
 
     pub async fn parse_user(
         user: String,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<(String, PlayerStats)>> {
         let user = user.trim();
         if user.starts_with("$avg") {
@@ -71,7 +71,7 @@ impl VsCommand {
                 };
                 let country = right;
                 let stats =
-                    average_of_rank(rank.clone(), Some(country.to_uppercase()), context).await;
+                    average_of_rank(rank.clone(), context).await;
 
                 let rank_str = format!(
                     "$avg{}:{country}",
@@ -85,7 +85,7 @@ impl VsCommand {
                     Err(err) => return Ok(Err(err)),
                 };
 
-                let stats = average_of_rank(rank.clone(), None, context).await;
+                let stats = average_of_rank(rank.clone(), context).await;
 
                 let rank_str = format!(
                     "$avg{}",
@@ -110,7 +110,7 @@ impl VsCommand {
 
             let discord_user = context
                 .tetrio_client
-                .search_user(&user_id.to_string())
+                .search_discord_user(&user_id.to_string())
                 .await?;
 
             let data = match &discord_user.data {
@@ -169,7 +169,7 @@ impl VsCommand {
     async fn parse_tetrio_user(
         user_name: &str,
         params: Vec<&str>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<(String, PlayerStats)>> {
         let user = context
             .tetrio_client
@@ -178,8 +178,8 @@ impl VsCommand {
         match &user.error {
             Some(err) => {
                 return Ok(Err(anyhow!(
-                    "❌ Couldn't find user data for {user_name} because {err}"
-                )))
+                    "❌ Couldn't find user data for {user_name} because {}"
+                , err.msg)))
             }
             None => {}
         };
@@ -188,60 +188,72 @@ impl VsCommand {
             Some(data) => data,
             None => return Ok(Err(anyhow!("❌ Couldn't find user data for {user_name}"))),
         };
+        let id = &data.id;
 
-        let id = &data.user.id;
+        let tetrio_league_summary = context.tetrio_client.fetch_user_league_summaries(&id).await?;
+
+        let Some(league_data) = &tetrio_league_summary.data else {
+            return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
+        };
+
         let (Some(mut pps), Some(mut apm), Some(mut vs)) = (
-            data.user.league.pps,
-            data.user.league.apm,
-            data.user.league.vs,
+            league_data.pps,
+            league_data.apm,
+            league_data.vs,
         ) else {
             return Ok(Err(anyhow!(
                 "❌ {user_name} doesn't have a valid tetra league record "
             )));
         };
 
-        let league_str = if let Some(Ok(mut tetra_league_game)) =
+        let league_str = 
+        if let Some(Ok(mut tetra_league_game)) =
             params.get(1).map(|s| str::parse::<usize>(s))
-        {
-            if tetra_league_game == 0 {
-                tetra_league_game = 1;
+        {            if tetra_league_game <= 0 {
+            tetra_league_game = 1;
+        }
+
+        let game = context.tetrio_client.fetch_user_personal_league_records(id, PersonalLeaderboard::Recent, PersonalRecordsQuery::None).await?;
+        let Some(data) = game.data else {
+            return Ok(Err(anyhow::anyhow!("❌ Couldn't find tetra league game")));
+        };
+        let records = data.entries.get((tetra_league_game - 1) as usize);
+        let Some(records) = &records else {
+            return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
+        };
+
+
+
+        if let Some(Ok(mut tetra_league_round)) = params.get(2).map(|s| str::parse::<usize>(s)) {
+            if tetra_league_round <= 0 {
+                tetra_league_round = 1;
             }
 
-            let game = context
-                .tetrio_client
-                .fetch_tetra_league_recent(id.as_ref())
-                .await?;
-            let Some(data) = &game.data else {
-                return Ok(Err(anyhow::anyhow!("❌ Couldn't find tetra league game")));
+            let Some(round) = records.results.rounds.get((tetra_league_round - 1) as usize) else {
+                return Err(anyhow::anyhow!("❌ Invalid round!"));
             };
-            let records = data.records.get(tetra_league_game - 1);
-            let Some(records) = &records else {
+
+            let Some(round) = round.iter().find(|user| &user.id == id) else {
+                return Err(anyhow::anyhow!("❌ Couldn't find stats!"));
+            };
+
+            pps = round.stats.pps;
+            apm = round.stats.apm;
+            vs  = round.stats.vsscore;
+
+            format!(":{}:{}", tetra_league_game, tetra_league_round)
+
+        } else {
+            let Some(left) = records.results.leaderboard.iter().find(|user| &user.id == id) else {
                 return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
             };
+            pps = left.stats.pps.unwrap_or(0.0);
+            apm = left.stats.apm.unwrap_or(0.0);
+            vs  = left.stats.vsscore.unwrap_or(0.0);
 
-            let Some(left) = records.endcontext.iter().find(|a| &a.get_id().unwrap_or("".into()) == id) else {
-                return Err(anyhow::anyhow!("❌ Couldn't find tetra league game"));
-            };
+            format!(":{}", tetra_league_game)
 
-            if let Some(Ok(mut tetra_league_round)) = params.get(2).map(|s| str::parse::<usize>(s))
-            {
-                if tetra_league_round == 0 {
-                    tetra_league_round = 1;
-                }
-
-                let index = tetra_league_round - 1;
-                pps = left.points.tertiary_avg_tracking[index];
-                apm = left.points.secondary_avg_tracking[index];
-                vs = left.points.extra_avg_tracking.aggregate_stats_vs_score[index];
-
-                format!(":{}:{}", tetra_league_game, tetra_league_round)
-            } else {
-                pps = left.points.tertiary;
-                apm = left.points.secondary;
-                vs = left.points.extra.vs;
-
-                format!(":{}", tetra_league_game)
-            }
+        }
         } else {
             String::new()
         };
@@ -250,12 +262,12 @@ impl VsCommand {
             format!("{}{}", user_name, league_str),
             PlayerStats {
                 apm,
-                glicko: data.user.league.glicko,
+                glicko: league_data.glicko,
                 pps,
                 vs,
-                rd: data.user.league.rd,
-                tr: Some(data.user.league.rating),
-                rank: Some(data.user.league.rank.clone()),
+                rd: league_data.rd,
+                tr: league_data.tr,
+                rank: league_data.rank.clone(),
             },
         )))
     }
@@ -283,11 +295,11 @@ impl RunnableCommand for VsCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("vs command");
         let _command_timer = Timer::new("vs command");
-        let thread = Context::threaded_defer_response(&context, interaction);
+        context.defer_response(interaction).await?;
         let (dark_mode, new_vec) = {
             let _timer = Timer::new("vs command parsing input");
             let model = Self::from_interaction(CommandInputData {
@@ -389,7 +401,6 @@ impl RunnableCommand for VsCommand {
             response
         };
 
-        thread.await??;
         let interaction_client = context.http_client.interaction(context.application.id);
         interaction_client
             .update_response(&interaction.token)

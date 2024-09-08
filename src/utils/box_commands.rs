@@ -15,7 +15,7 @@ pub trait RunnableCommand {
         shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>>;
 }
 
@@ -47,7 +47,7 @@ pub trait PhantomCommandTrait: Send + Sync {
         shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>>;
 }
 
@@ -66,7 +66,7 @@ impl<T: CreateCommand + RunnableCommand + Send + Sync> PhantomCommandTrait for P
         shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         T::run(shard, interaction, data, context).await
     }

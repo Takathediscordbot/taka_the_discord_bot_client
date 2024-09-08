@@ -11,7 +11,7 @@ use super::application_command;
 pub async fn handle_interaction_create(
     shard: u64,
     it: Box<InteractionCreate>,
-    context: &Context,
+    context: &Context<'_>,
 ) {
     match (it.kind, it.data.clone()) {
         (InteractionType::ApplicationCommand, Some(InteractionData::ApplicationCommand(data))) => {

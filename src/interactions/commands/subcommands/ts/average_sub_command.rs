@@ -9,6 +9,5 @@ pub struct AverageSubCommand {
     pub rank: Option<UserRankOption>,
     /// use detailed informations
     pub details: Option<bool>,
-    /// Country to limit the stats to
-    pub country: Option<String>,
+
 }

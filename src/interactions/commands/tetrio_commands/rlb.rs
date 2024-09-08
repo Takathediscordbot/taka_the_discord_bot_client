@@ -46,23 +46,22 @@ impl RunnableCommand for RLbCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("rlb command");
         let _command_timer = Timer::new("rlb command");
-        let thread = Context::threaded_defer_response(&context, interaction);
+        Context::defer_response(&context, interaction).await?;
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
         })?;
 
         let leaderboard = context
-            .tetrio_client
-            .fetch_full_league_leaderboard(model.country_code.as_deref())
+            .fetch_full_leaderboard(model.country_code.as_deref())
             .await?;
 
         let Some(data) = &leaderboard.data else {
-            return Ok(Err(anyhow!("Couldn't fetch leaderboard data because {}", leaderboard.error.clone().unwrap_or("Unknwon error".to_string()))));
+            return Ok(Err(anyhow!("❌ Couldn't fetch leaderboard data!")));
         };
 
         let iter = LbCommand::filter_rank(data, &model.rank);
@@ -91,7 +90,6 @@ impl RunnableCommand for RLbCommand {
             })
             .join("\n");
         let content = format!("```\n{content}\n```");
-        thread.await??;
         let interaction_client = context.http_client.interaction(context.application.id);
         let r = interaction_client
             .update_response(&interaction.token)

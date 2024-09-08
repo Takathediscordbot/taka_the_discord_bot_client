@@ -50,7 +50,7 @@ struct CommandImageId {
 pub struct SillyCommandPDO;
 impl SillyCommandPDO {
     
-    pub async fn fetch_silly_commands(context: &Context) -> Vec<SillyCommandData> {
+    pub async fn fetch_silly_commands(context: &Context<'_>) -> Vec<SillyCommandData> {
         let Ok(silly_commands) = sqlx::query(include_str!("../sql/silly_commands/fetch_silly_commands.sql"))
         .fetch_all(&context.sql_connection)
         .await else {
@@ -65,7 +65,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn fetch_command_usage(
-        context: &Context,
+        context: &Context<'_>,
         command: i32,
         author: u64,
         user: u64,
@@ -85,7 +85,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn increment_command_usage(
-        context: &Context,
+        context: &Context<'_>,
         command: i32,
         author: u64,
         user: u64,
@@ -101,7 +101,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn create_command_usage(
-        context: &Context,
+        context: &Context<'_>,
         command: i32,
         author: u64,
         user: u64,
@@ -120,7 +120,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn create_command(
-        context: &Context,
+        context: &Context<'_>,
         command_name: &str,
         description: &str,
         footer_text: &str,
@@ -142,7 +142,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn add_preference(
-        context: &Context,
+        context: &Context<'_>,
         preference: &str,
         command: &str
     )
@@ -157,7 +157,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn fetch_silly_command_by_name(
-        context: &Context,
+        context: &Context<'_>,
         name: &str,
     ) -> Option<SillyCommandData> {
         let Ok(Ok(silly_commands)) = 
@@ -174,7 +174,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn fetch_random_silly_image_by_name_and_preference(
-        context: &Context,
+        context: &Context<'_>,
         command: i32,
         preference: &str
     ) -> anyhow::Result<String> {
@@ -192,7 +192,7 @@ impl SillyCommandPDO {
 
 
     pub async fn add_text(
-        context: &Context,
+        context: &Context<'_>,
         command_name: &str,
         content: &str,
     ) -> anyhow::Result<i32> {
@@ -210,7 +210,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn add_text_author(
-        context: &Context,
+        context: &Context<'_>,
         command_name: &str,
         content: &str,
     ) -> anyhow::Result<i32> {
@@ -228,7 +228,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn add_image(
-        context: &Context,
+        context: &Context<'_>,
         command_name: &str,
         image: Vec<u8>,
         extension: &str,
@@ -260,7 +260,7 @@ impl SillyCommandPDO {
     }
 
     pub async fn add_image_author(
-        context: &Context,
+        context: &Context<'_>,
         command_name: &str,
         image: Vec<u8>,
         extension: &str,

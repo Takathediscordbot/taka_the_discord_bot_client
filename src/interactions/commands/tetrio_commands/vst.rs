@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use anyhow::anyhow;
 use itertools::Itertools;
 use twilight_interactions::command::{CommandInputData, CommandModel, CreateCommand, ResolvedUser};
 use twilight_model::{
@@ -39,11 +38,11 @@ pub enum VstCommand {
 impl VstCommand {
     pub async fn from_discord_user(
         user: &ResolvedUser,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<(String, Stats)>> {
         let tetrio_user = context
             .tetrio_client
-            .search_user(&user.resolved.id.to_string())
+            .search_discord_user(&user.resolved.id.to_string())
             .await?;
 
         let Some(data) = &tetrio_user.data else {
@@ -59,31 +58,24 @@ impl VstCommand {
 
     pub async fn from_tetrio_user(
         user: &str,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<(String, Stats)>> {
-        let tetrio_user = context.tetrio_client.fetch_user_info(user).await?;
+        let tetrio_user = context.tetrio_client.fetch_user_info(&user).await?;
 
         let Some(data) = &tetrio_user.data else {
-            return Ok(Err(anyhow!(
-                "❌ No data has been found for user {user}. User might be anonymous or banned."
-            )));
+            return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
         };
 
-        let (_id, username, Some(apm), Some(pps), Some(vs), rank, tr, Some(glicko), Some(rd)) = (
-            &data.user.id,
-            &data.user.username,
-            data.user.league.apm,
-            data.user.league.pps,
-            data.user.league.vs,
-            &data.user.league.rank,
-            data.user.league.rating,
-            data.user.league.glicko,
-            data.user.league.rd,
-        ) else {
-            return Ok(Err(anyhow::anyhow!(
-                "❌ No tetra league stats have been found for user {user}."
-            )));
+        let tetrio_league_summary = context.tetrio_client.fetch_user_league_summaries(&user).await?;
+
+        let Some(league_data) = &tetrio_league_summary.data else {
+            return Ok(Err(anyhow::anyhow!("❌ No data has been found. User might be anonymous or banned.")));
         };
+
+        let (_id, username, Some(apm), Some(pps), Some(vs), rank, tr, Some(glicko), Some(rd)) = (&data.id, &data.username, league_data.apm, league_data.pps, league_data.vs, &league_data.rank, league_data.tr, league_data.glicko, league_data.rd) else {
+            return Ok(Err(anyhow::anyhow!("❌ No tetra league stats have been found.")));
+        };
+
 
         Ok(Ok((
             username.to_string(),
@@ -92,9 +84,9 @@ impl VstCommand {
                 pps,
                 vs,
                 rd: Some(rd),
-                tr: Some(tr),
+                tr: tr,
                 glicko: Some(glicko),
-                rank: Some(rank.clone()),
+                rank: rank.clone(),
             }),
         )))
     }
@@ -102,11 +94,10 @@ impl VstCommand {
     async fn from_average(
         rank: Option<UserRankOption>,
         country: Option<String>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<(String, Stats)>> {
         let stats = average_of_rank(
             rank.clone().map(|r| r.into()),
-            country.clone().map(|c| c.to_uppercase()),
             context,
         )
         .await?;
@@ -151,11 +142,11 @@ impl RunnableCommand for VstCommand {
         _shard: u64,
         interaction: &InteractionCreate,
         data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         log::info!("VST Command");
         let _command_timer = Timer::new("vst command");
-        let thread = Context::threaded_defer_response(&context, interaction);
+        Context::defer_response(&context, interaction).await?;
         let model = Self::from_interaction(CommandInputData {
             options: data.options,
             resolved: data.resolved.map(Cow::Owned),
@@ -467,8 +458,6 @@ impl RunnableCommand for VstCommand {
             final_str
         };
         log::debug!("{}", final_str.len());
-
-        thread.await??;
 
         let interaction_client = context.http_client.interaction(context.application.id);
         let r = interaction_client

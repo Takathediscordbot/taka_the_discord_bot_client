@@ -19,7 +19,7 @@ pub async fn handle_chat_command(
     shard: u64,
     interaction: &InteractionCreate,
     data: Box<CommandData>,
-    context: &Context,
+    context: &Context<'_>,
 ) -> anyhow::Result<()> {
     let name = data.name.as_str();
     let command = context.commands.iter().find(|a| a.get_name() == name);
@@ -132,7 +132,7 @@ pub async fn handle_application_command(
     shard: u64,
     interaction: &InteractionCreate,
     data: Box<CommandData>,
-    context: &Context,
+    context: &Context<'_>,
 ) -> anyhow::Result<()> {
     let _timer = Timer::new("handle_application_command");
     

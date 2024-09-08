@@ -12,7 +12,7 @@ use crate::{context::Context, utils::box_commands::RunnableCommand};
 pub struct ReloadCommands {}
 
 impl ReloadCommands {
-    async fn create_commands(context: &Context) -> anyhow::Result<Vec<Command>> {
+    async fn create_commands(context: &Context<'_>) -> anyhow::Result<Vec<Command>> {
         #[allow(unused_mut)]
         let mut v: Vec<Command> = context
             .commands
@@ -118,7 +118,7 @@ impl RunnableCommand for ReloadCommands {
         _shard: u64,
         interaction: &InteractionCreate,
         _data: Box<CommandData>,
-        context: &Context,
+        context: &Context<'_>,
     ) -> anyhow::Result<anyhow::Result<()>> {
         let Some(author) = interaction.author_id() else {
             return Ok(Err(anyhow!("❌ You're probably not the author of this bot!")));
