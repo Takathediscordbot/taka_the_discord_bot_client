@@ -91,23 +91,19 @@ impl LbCommand {
         match leaderboart_stat {
             UserStatOption::APM => iter
                 .filter_map(|(rank, user)| {
-                    Some(user.league
-                        .apm)
-                        .map(|stat| (rank, user.username.clone(), stat))
+                    user.league.apm.map(|stat| (rank, user.username.clone(), stat))
                 })
                 .collect(),
             UserStatOption::PPS => iter
                 .filter_map(|(rank, user)| {
-                    Some(user.league
-                        .pps)
-                        .map(|stat| (rank, user.username.clone(), stat))
+                    user.league.pps.map(|stat| (rank, user.username.clone(), stat))
+
                 })
                 .collect(),
             UserStatOption::VS => iter
                 .filter_map(|(rank, user)| {
-                    Some(user.league
-                        .vs)
-                        .map(|stat| (rank, user.username.clone(), stat))
+                    user.league.vs.map(|stat| (rank, user.username.clone(), stat))
+
                 })
                 .collect(),
             UserStatOption::WR => iter
@@ -130,8 +126,10 @@ impl LbCommand {
                 .collect(),
             e => iter
                 .filter_map(|(rank, user)| {
-                    let (pps, apm, vs) =
-                        (user.league.pps, user.league.apm, user.league.vs);
+                    let (Some(pps), Some(apm), Some(vs)) =
+                        (user.league.pps, user.league.apm, user.league.vs) else {
+                            return None
+                        };
                     {
                         let stats = calculate_stats(PlayerStats {
                             apm,

@@ -2,6 +2,8 @@
 #![cfg(feature = "tetrio")]
 
 
+use std::collections::HashMap;
+
 use anyhow::anyhow;
 use tetrio_api::models::{labs::league_ranks::LeagueRank, packet::Packet, users::user_rank::UserRank};
 
@@ -20,7 +22,7 @@ pub async fn average_of_rank(
     let data = match &rank {
         Some(rank) => data.data.ranks.get(&rank).ok_or(anyhow!("Couldn't find stats for rank {}", &rank))?.clone(),
         None => {
-            let sum = data.data.ranks.values().fold(LeagueRank { pos: 0, percentile: 0.0, tr: 0.0, targettr: 0.0, apm: None, pps: None, vs: None, count: 0 },|acc: LeagueRank, value: &LeagueRank| LeagueRank {
+            let sum = data.data.ranks.values().fold(LeagueRank { pos: 0, percentile: 0.0, tr: 0.0, targettr: 0.0, apm: None, pps: None, vs: None, count: 0, ignored_fields: HashMap::new() },|acc: LeagueRank, value: &LeagueRank| LeagueRank {
             pos: 0,
             percentile: 0.0,
             tr: acc.tr + value.tr,
@@ -29,6 +31,7 @@ pub async fn average_of_rank(
             pps: Some(acc.pps.unwrap_or(0.0) + value.pps.unwrap_or(0.0)),
             vs:  Some( acc.vs.unwrap_or(0.0) + value.vs.unwrap_or(0.0)),
             count: acc.count + value.count,
+            ignored_fields: acc.ignored_fields
         });
         
         LeagueRank {
@@ -40,6 +43,7 @@ pub async fn average_of_rank(
             pps: sum.pps.map(|v| v / data.data.ranks.len() as f64),
             vs: sum.vs.map(|v| v / data.data.ranks.len() as f64),
             count: sum.count,
+            ignored_fields: sum.ignored_fields
         }
     }
 
